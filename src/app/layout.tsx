@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'City Cargo - Logistics & Fleet Hub',
   description: 'Piattaforma di gestione flotta, check-in autisti e presenze City Cargo.',
