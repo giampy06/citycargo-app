@@ -18,15 +18,20 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      // 1. Autenticazione con Supabase
+      // 1. Forza prima la pulizia di eventuali sessioni residue
+      await supabase.auth.signOut();
+
+      // 2. Autenticazione stretta con password su Supabase Auth
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         password: password,
       });
 
-      if (error) throw error;
+      if (error || !data?.user) {
+        throw new Error('Email o password errati.');
+      }
 
-      // 2. Controllo Ruolo Admin
+      // 3. Verifica del ruolo 'admin' nella tabella profili
       const { data: profilo, error: profError } = await supabase
         .from('profili')
         .select('ruolo')
@@ -34,11 +39,11 @@ export default function AdminLoginPage() {
         .maybeSingle();
 
       if (profError || profilo?.ruolo !== 'admin') {
-        // Se non è admin eseguiamo il logout immediato
         await supabase.auth.signOut();
-        throw new Error('Accesso negato: questo account non dispone dei permessi da Amministratore.');
+        throw new Error('Accesso negato: account non autorizzato per l\'area amministrativa.');
       }
 
+      // Accesso confermato
       router.push('/');
     } catch (err: any) {
       setErrorMsg(err.message || 'Credenziali non valide.');
@@ -48,7 +53,7 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0F172A] flex items-center justify-center p-4 antialiased">
+    <div className="min-h-screen bg-[#0F172A] flex items-center justify-center p-4 antialiased font-sans">
       <div className="max-w-md w-full bg-[#1E293B] border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
         <div className="text-center space-y-2">
           <div className="w-14 h-14 bg-red-600/10 border border-red-500/20 text-[#E05353] rounded-2xl mx-auto flex items-center justify-center shadow-inner">

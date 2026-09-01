@@ -17,7 +17,8 @@ import {
   PlusCircle, 
   Loader2,
   ChevronRight,
-  AlertCircle
+  Euro,
+  TrendingUp
 } from 'lucide-react';
 
 export default function AutistaHomePage() {
@@ -29,6 +30,10 @@ export default function AutistaHomePage() {
   const [turnoAperto, setTurnoAperto] = useState<any | null>(null);
   const [turniOggi, setTurniOggi] = useState<any[]>([]);
 
+  // Statistiche mese corrente
+  const [totaleMaturatoMese, setTotaleMaturatoMese] = useState<number>(0);
+  const [giorniLavoratiMese, setGiorniLavoratiMese] = useState<number>(0);
+
   useEffect(() => {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession();
@@ -37,36 +42,48 @@ export default function AutistaHomePage() {
         return;
       }
       setUser(session.user);
-      fetchTurniOggi(session.user.id);
+      await fetchDatiAutista(session.user.id);
     }
     init();
   }, [router]);
 
-  const fetchTurniOggi = async (userId: string) => {
+  const fetchDatiAutista = async (userId: string) => {
     setLoading(true);
     try {
-      // Inizio e fine giornata odierna in formato ISO
+      // 1. Turni di oggi (dalle 00:00:00)
       const oggi = new Date();
       oggi.setHours(0, 0, 0, 0);
       const oggiISO = oggi.toISOString();
 
-      const { data, error } = await supabase
+      const { data: dataOggi } = await supabase
         .from('turni_presenze')
         .select('*')
         .eq('autista_id', userId)
         .gte('created_at', oggiISO)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      const turniOggiList = dataOggi || [];
+      setTurniOggi(turniOggiList);
+      setTurnoAperto(turniOggiList.find((t) => t.stato === 'aperto') || null);
 
-      const turni = data || [];
-      setTurniOggi(turni);
+      // 2. Calcolo Maturato Mese Corrente (dal 1° giorno del mese corrente)
+      const primoDelMese = new Date(oggi.getFullYear(), oggi.getMonth(), 1).toISOString();
 
-      // Cerca se c'è un turno attualmente aperto (in corso)
-      const aperto = turni.find((t) => t.stato === 'aperto');
-      setTurnoAperto(aperto || null);
+      const { data: dataMese } = await supabase
+        .from('turni_presenze')
+        .select('created_at, compenso_giornaliero')
+        .eq('autista_id', userId)
+        .gte('created_at', primoDelMese);
+
+      if (dataMese) {
+        const mat = dataMese.reduce((acc, curr) => acc + (Number(curr.compenso_giornaliero) || 0), 0);
+        setTotaleMaturatoMese(mat);
+
+        const distGiorni = new Set(dataMese.map(t => new Date(t.created_at).toDateString())).size;
+        setGiorniLavoratiMese(distGiorni);
+      }
     } catch (err) {
-      console.error('Errore recupero turni autista:', err);
+      console.error('Errore recupero dati autista:', err);
     } finally {
       setLoading(false);
     }
@@ -87,8 +104,9 @@ export default function AutistaHomePage() {
   }
 
   const nomeAutista = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Autista';
-  const haCompletatoAlmenoUnTurno = turniOggi.some((t) => t.stato === 'chiuso');
   const numeroTurnoProssimo = turniOggi.length + 1;
+
+  const nomeMeseCorrente = new Date().toLocaleDateString('it-IT', { month: 'long' });
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] font-sans antialiased pb-24">
@@ -116,11 +134,40 @@ export default function AutistaHomePage() {
       </header>
 
       <main className="max-w-xl mx-auto px-4 pt-5 space-y-4">
+        {/* BLOCCO CIFRA MATURATA NEL MESE */}
+        <div className="bg-gradient-to-br from-[#1E242B] to-[#2C353F] text-white rounded-3xl p-5 shadow-lg relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider capitalize">
+              Maturato di {nomeMeseCorrente}
+            </span>
+            <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-xl">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+          </div>
+
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-black text-emerald-400">
+              € {totaleMaturatoMese.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+            <span className="text-xs text-gray-400 font-medium">lordo stimato</span>
+          </div>
+
+          <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between text-xs text-gray-300">
+            <span>Giornate Lavorate: <b className="text-white">{giorniLavoratiMese} gg</b></span>
+            <Link 
+              href="/autista/calendario" 
+              className="text-[11px] text-rose-300 hover:text-white font-bold flex items-center gap-0.5"
+            >
+              Vedi dettaglio <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+
         {/* STATO OPERATIVO ATTUALE */}
         {turnoAperto ? (
-          <div className="bg-[#1E242B] text-white rounded-3xl p-6 shadow-xl space-y-4">
+          <div className="bg-white text-[#1E242B] border border-amber-200 rounded-3xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
                 🟡 Turno in Corso
               </span>
               <span className="text-[11px] font-mono text-gray-400">
@@ -130,11 +177,11 @@ export default function AutistaHomePage() {
 
             <div>
               <span className="text-xs text-gray-400">Furgone Assegnato:</span>
-              <h2 className="text-3xl font-black tracking-tight mt-0.5 text-white">
+              <h2 className="text-3xl font-black tracking-tight mt-0.5 text-[#1E242B]">
                 {turnoAperto.targa_mezzo}
               </h2>
-              <p className="text-xs text-emerald-400 mt-1">
-                Appalto: <b>{turnoAperto.appalto}</b> | Partenza: <b>{Number(turnoAperto.km_inizio).toLocaleString('it-IT')} km</b>
+              <p className="text-xs text-gray-600 mt-1">
+                Appalto: <b className="text-[#1E242B]">{turnoAperto.appalto}</b> | Partenza: <b>{Number(turnoAperto.km_inizio).toLocaleString('it-IT')} km</b>
               </p>
             </div>
 
@@ -164,7 +211,7 @@ export default function AutistaHomePage() {
               <p className="text-xs text-gray-500 mt-1 leading-relaxed">
                 {turniOggi.length === 0
                   ? 'Effettua il check-in iniziale con perizia fotografica a 4 lati del mezzo prima della partenza.'
-                  : `Hai già completato ${turniOggi.length} turno oggi. Puoi avviare un secondo turno con lo stesso o un altro furgone.`}
+                  : `Hai già completato ${turniOggi.length} turno oggi. Puoi avviare un secondo turno con lo stesso o un altro mezzo.`}
               </p>
             </div>
 
@@ -191,7 +238,7 @@ export default function AutistaHomePage() {
           </div>
         )}
 
-        {/* MENU RAPIDO SEZIONI AUTISTA (Calendario Presenze & Buste Paga) */}
+        {/* MENU RAPIDO SEZIONI */}
         <div className="grid grid-cols-2 gap-3">
           <Link
             href="/autista/calendario"
@@ -202,7 +249,7 @@ export default function AutistaHomePage() {
             </div>
             <div>
               <h3 className="text-xs font-black text-[#1E242B]">Calendario Presenze</h3>
-              <p className="text-[10px] text-gray-400 mt-0.5">Storico turni e giri svolti</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">Storico turni e compensi</p>
             </div>
           </Link>
 
@@ -224,7 +271,7 @@ export default function AutistaHomePage() {
         {turniOggi.length > 0 && (
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
-              Turni Registrati Oggi ({turniOggi.length})
+              Turni di Oggi ({turniOggi.length})
             </h3>
 
             <div className="space-y-2">
@@ -247,9 +294,16 @@ export default function AutistaHomePage() {
                         In corso
                       </span>
                     ) : (
-                      <span className="text-xs font-extrabold text-emerald-600">
-                        +{t.km_percorsi || 0} km
-                      </span>
+                      <div>
+                        <span className="text-xs font-extrabold text-emerald-600 block">
+                          +{t.km_percorsi || 0} km
+                        </span>
+                        {t.compenso_giornaliero > 0 && (
+                          <span className="text-[10px] font-bold text-gray-500">
+                            € {Number(t.compenso_giornaliero).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
