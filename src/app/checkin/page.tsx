@@ -8,13 +8,10 @@ import { applicaWatermarkLegale } from '@/lib/watermark';
 import { 
   ChevronLeft, 
   Camera, 
-  UploadCloud, 
   Loader2, 
   CheckCircle2, 
   AlertCircle, 
-  Truck, 
-  Gauge, 
-  FileCheck 
+  Check 
 } from 'lucide-react';
 
 export default function CheckinPage() {
@@ -23,17 +20,21 @@ export default function CheckinPage() {
   const [veicoli, setVeicoli] = useState<any[]>([]);
   const [loadingInit, setLoadingInit] = useState(true);
 
-  // Form State
+  // Dati Turno
   const [targa, setTarga] = useState('');
   const [appalto, setAppalto] = useState<'CITI' | 'EDF' | 'RHENUS'>('CITI');
   const [kmInizio, setKmInizio] = useState('');
   const [noteInizio, setNoteInizio] = useState('');
   const [gpsPos, setGpsPos] = useState<string>('');
 
-  // Foto controlli
-  const [fotoQuadro, setFotoQuadro] = useState<File | null>(null);
-  const [fotoDanni, setFotoDanni] = useState<File | null>(null);
+  // 4 Scatti Fotografici dei Lati del Mezzo
+  const [fotoFrontale, setFotoFrontale] = useState<File | null>(null);
+  const [fotoRetro, setFotoRetro] = useState<File | null>(null);
+  const [fotoLatoSx, setFotoLatoSx] = useState<File | null>(null);
+  const [fotoLatoDx, setFotoLatoDx] = useState<File | null>(null);
+
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgressText, setUploadProgressText] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,14 +46,12 @@ export default function CheckinPage() {
       }
       setUser(session.user);
 
-      // Carica veicoli per selezione rapida
       const { data: vData } = await supabase.from('veicoli').select('targa, modello').order('targa');
       if (vData && vData.length > 0) {
         setVeicoli(vData);
         setTarga(vData[0].targa);
       }
 
-      // Rilevamento coordinate GPS
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => setGpsPos(`${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`),
@@ -64,6 +63,43 @@ export default function CheckinPage() {
     init();
   }, [router]);
 
+  const uploadFotoCertificata = async (
+    file: File, 
+    tipoControllo: string, 
+    tipoFoto: string, 
+    turnoId: string, 
+    codiceVerbale: string, 
+    autistaNome: string
+  ) => {
+    const stampedBlob = await applicaWatermarkLegale(file, {
+      targa: targa.toUpperCase(),
+      autista: autistaNome,
+      tipoControllo: `Check-in ${tipoControllo}`,
+      codiceVerbale,
+      gps: gpsPos,
+    });
+
+    const filePath = `turni/${turnoId}/${tipoFoto}_${Date.now()}.jpg`;
+    const { error: upErr } = await supabase.storage
+      .from('vehicle-inspections')
+      .upload(filePath, stampedBlob, { contentType: 'image/jpeg' });
+
+    if (!upErr) {
+      const { data: pUrl } = supabase.storage.from('vehicle-inspections').getPublicUrl(filePath);
+      await supabase.from('verbali_foto').insert([
+        {
+          turno_id: turnoId,
+          tipo_controllo: 'checkin',
+          tipo_foto: tipoFoto,
+          foto_url: pUrl.publicUrl,
+          targa: targa.toUpperCase(),
+          autista_nome: autistaNome,
+          coordinate_gps: gpsPos || null,
+        },
+      ]);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -73,12 +109,17 @@ export default function CheckinPage() {
       return;
     }
 
+    if (!fotoFrontale || !fotoRetro || !fotoLatoSx || !fotoLatoDx) {
+      setErrorMsg('Scatta tutte le 4 foto dei lati del veicolo per procedere.');
+      return;
+    }
+
     setSubmitting(true);
     const autistaNome = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Autista';
     const codiceVerbale = `CHK-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
     try {
-      // 1. Creazione turno
+      setUploadProgressText('Creazione verbale di servizio...');
       const { data: turno, error: turnoErr } = await supabase
         .from('turni_presenze')
         .insert([
@@ -98,69 +139,24 @@ export default function CheckinPage() {
 
       if (turnoErr) throw turnoErr;
 
-      // 2. Upload Foto Quadro con Filigrana Digitale
-      if (fotoQuadro && turno) {
-        const stampedBlob = await applicaWatermarkLegale(fotoQuadro, {
-          targa: targa.toUpperCase(),
-          autista: autistaNome,
-          tipoControllo: 'Check-in Quadro Km',
-          codiceVerbale,
-          gps: gpsPos,
-        });
+      // Upload 4 Foto Lati Veicolo con Watermark
+      setUploadProgressText('Timbro e invio Lato Frontale (1/4)...');
+      await uploadFotoCertificata(fotoFrontale, 'Frontale', 'frontale', turno.id, codiceVerbale, autistaNome);
 
-        const filePath = `turni/${turno.id}/quadro_inizio_${Date.now()}.jpg`;
-        const { error: upErr } = await supabase.storage.from('vehicle-inspections').upload(filePath, stampedBlob, { contentType: 'image/jpeg' });
-        
-        if (!upErr) {
-          const { data: pUrl } = supabase.storage.from('vehicle-inspections').getPublicUrl(filePath);
-          await supabase.from('verbali_foto').insert([
-            {
-              turno_id: turno.id,
-              tipo_controllo: 'checkin',
-              tipo_foto: 'quadro_km',
-              foto_url: pUrl.publicUrl,
-              targa: targa.toUpperCase(),
-              autista_nome: autistaNome,
-              coordinate_gps: gpsPos || null,
-            },
-          ]);
-        }
-      }
+      setUploadProgressText('Timbro e invio Lato Posteriore (2/4)...');
+      await uploadFotoCertificata(fotoRetro, 'Retro', 'retro', turno.id, codiceVerbale, autistaNome);
 
-      // 3. Upload Foto Danni/Carrozzeria (opzionale)
-      if (fotoDanni && turno) {
-        const stampedDanniBlob = await applicaWatermarkLegale(fotoDanni, {
-          targa: targa.toUpperCase(),
-          autista: autistaNome,
-          tipoControllo: 'Check-in Stato Carrozzeria',
-          codiceVerbale,
-          gps: gpsPos,
-        });
+      setUploadProgressText('Timbro e invio Fiancata Sinistra (3/4)...');
+      await uploadFotoCertificata(fotoLatoSx, 'Fiancata Sinistra', 'lato_sx', turno.id, codiceVerbale, autistaNome);
 
-        const filePathDanni = `turni/${turno.id}/carrozzeria_inizio_${Date.now()}.jpg`;
-        const { error: upDanniErr } = await supabase.storage.from('vehicle-inspections').upload(filePathDanni, stampedDanniBlob, { contentType: 'image/jpeg' });
+      setUploadProgressText('Timbro e invio Fiancata Destra (4/4)...');
+      await uploadFotoCertificata(fotoLatoDx, 'Fiancata Destra', 'lato_dx', turno.id, codiceVerbale, autistaNome);
 
-        if (!upDanniErr) {
-          const { data: pUrlDanni } = supabase.storage.from('vehicle-inspections').getPublicUrl(filePathDanni);
-          await supabase.from('verbali_foto').insert([
-            {
-              turno_id: turno.id,
-              tipo_controllo: 'checkin',
-              tipo_foto: 'danno',
-              foto_url: pUrlDanni.publicUrl,
-              targa: targa.toUpperCase(),
-              autista_nome: autistaNome,
-              coordinate_gps: gpsPos || null,
-            },
-          ]);
-        }
-      }
-
-      alert(`Check-in registrato con successo!\nVerbale: ${codiceVerbale}`);
+      alert(`Check-in registrato con successo!\n4 Foto certificate archiviate.\nVerbale: ${codiceVerbale}`);
       window.location.href = '/autista';
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || 'Errore durante la registrazione del check-in.');
+      setErrorMsg(err.message || 'Errore durante la registrazione.');
     } finally {
       setSubmitting(false);
     }
@@ -175,8 +171,10 @@ export default function CheckinPage() {
     );
   }
 
+  const fotoCompletate = [fotoFrontale, fotoRetro, fotoLatoSx, fotoLatoDx].filter(Boolean).length;
+
   return (
-    <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] pb-20 antialiased">
+    <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] pb-24 antialiased">
       {/* Header */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-30 px-4 py-3">
         <div className="max-w-xl mx-auto flex items-center justify-between">
@@ -188,7 +186,7 @@ export default function CheckinPage() {
           </Link>
           <div className="text-center">
             <h1 className="font-extrabold text-sm uppercase tracking-wider">Inizio Turno (Check-in)</h1>
-            <p className="text-[11px] text-gray-400 font-medium">Assegnazione Mezzo e Perizia Digitale</p>
+            <p className="text-[11px] text-gray-400 font-medium">Controllo 4 Lati Veicolo & Km</p>
           </div>
           <div className="w-10 h-10" />
         </div>
@@ -204,145 +202,165 @@ export default function CheckinPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           
-          {/* Dati Mezzo & Appalto */}
+          {/* Sezione Mezzo e Km */}
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
-              1. Selezione Veicolo & Appalto
+              1. Mezzo, Appalto e Chilometri
             </label>
 
             <div>
-              <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Targa Mezzo</label>
-              {veicoli.length > 0 ? (
-                <select
-                  value={targa}
-                  onChange={(e) => setTarga(e.target.value)}
-                  className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                  required
-                >
-                  {veicoli.map((v) => (
-                    <option key={v.targa} value={v.targa}>
-                      {v.targa} — {v.modello || 'Furgone'}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  placeholder="es. FY123AB"
-                  value={targa}
-                  onChange={(e) => setTarga(e.target.value.toUpperCase())}
-                  className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold uppercase focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                  required
-                />
-              )}
+              <label className="text-xs font-semibold text-gray-600 mb-1 block">Furgone Selezionato</label>
+              <select
+                value={targa}
+                onChange={(e) => setTarga(e.target.value)}
+                className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                required
+              >
+                {veicoli.map((v) => (
+                  <option key={v.targa} value={v.targa}>
+                    {v.targa} — {v.modello || 'Furgone'}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Appalto di Riferimento</label>
-              <div className="grid grid-cols-3 gap-2">
-                {(['CITI', 'EDF', 'RHENUS'] as const).map((app) => (
-                  <button
-                    key={app}
-                    type="button"
-                    onClick={() => setAppalto(app)}
-                    className={`py-2.5 rounded-xl font-bold text-xs transition border ${
-                      appalto === app
-                        ? 'bg-[#1E242B] text-white border-[#1E242B]'
-                        : 'bg-gray-50 border-gray-100 text-gray-600'
-                    }`}
-                  >
-                    {app}
-                  </button>
-                ))}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">Appalto</label>
+                <select
+                  value={appalto}
+                  onChange={(e: any) => setAppalto(e.target.value)}
+                  className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                >
+                  <option value="CITI">CITI</option>
+                  <option value="EDF">EDF</option>
+                  <option value="RHENUS">RHENUS</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">Km Attuali</label>
+                <input
+                  type="number"
+                  placeholder="es. 124500"
+                  value={kmInizio}
+                  onChange={(e) => setKmInizio(e.target.value)}
+                  className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                  required
+                />
               </div>
             </div>
           </div>
 
-          {/* Km & Foto Quadro con Watermark */}
+          {/* Sezione 4 Foto Lati Veicolo */}
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-4">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
-              2. Chilometri & Foto Quadro Strumenti
-            </label>
-
-            <div>
-              <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Km alla Partenza</label>
-              <input
-                type="number"
-                placeholder="es. 124500"
-                value={kmInizio}
-                onChange={(e) => setKmInizio(e.target.value)}
-                className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                required
-              />
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
+                2. Perizia Fotografica (4 Lati)
+              </label>
+              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                fotoCompletate === 4 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+              }`}>
+                {fotoCompletate}/4 Foto Scattate
+              </span>
             </div>
 
-            {/* Upload Foto Quadro con Fotocamera */}
-            <div>
-              <label className="text-xs font-semibold text-gray-600 mb-1.5 block flex items-center justify-between">
-                <span>Foto Quadro Km (Obbligatoria)</span>
-                <span className="text-[10px] text-emerald-600 font-bold">● Timbro Digitale GPS</span>
-              </label>
-              <label className="border-2 border-dashed border-gray-200 hover:border-[#E05353] rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer bg-[#F8F9FB] transition">
+            <div className="grid grid-cols-2 gap-3">
+              {/* Foto 1: Frontale */}
+              <label className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition text-center ${
+                fotoFrontale ? 'border-emerald-500 bg-emerald-50/50' : 'border-gray-200 bg-[#F8F9FB] hover:border-[#E05353]'
+              }`}>
                 <input
                   type="file"
                   accept="image/*"
                   capture="environment"
-                  onChange={(e) => setFotoQuadro(e.target.files?.[0] || null)}
+                  onChange={(e) => setFotoFrontale(e.target.files?.[0] || null)}
                   className="hidden"
                 />
-                <Camera className="w-7 h-7 text-[#E05353] mb-1.5" />
-                <span className="text-xs font-bold text-gray-700">
-                  {fotoQuadro ? `✓ ${fotoQuadro.name}` : 'Scatta Foto al Quadro Acceso'}
-                </span>
-                <span className="text-[10px] text-gray-400 mt-0.5">Applica automaticamente data, ora e coordinate</span>
+                {fotoFrontale ? <Check className="w-6 h-6 text-emerald-600 mb-1" /> : <Camera className="w-6 h-6 text-[#E05353] mb-1" />}
+                <span className="text-xs font-bold text-gray-800">1. Lato Frontale</span>
+                <span className="text-[10px] text-gray-400 mt-0.5">{fotoFrontale ? '✓ Acquisita' : 'Scatta foto'}</span>
+              </label>
+
+              {/* Foto 2: Retro */}
+              <label className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition text-center ${
+                fotoRetro ? 'border-emerald-500 bg-emerald-50/50' : 'border-gray-200 bg-[#F8F9FB] hover:border-[#E05353]'
+              }`}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => setFotoRetro(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+                {fotoRetro ? <Check className="w-6 h-6 text-emerald-600 mb-1" /> : <Camera className="w-6 h-6 text-[#E05353] mb-1" />}
+                <span className="text-xs font-bold text-gray-800">2. Lato Posteriore</span>
+                <span className="text-[10px] text-gray-400 mt-0.5">{fotoRetro ? '✓ Acquisita' : 'Scatta foto'}</span>
+              </label>
+
+              {/* Foto 3: Lato Sinistro */}
+              <label className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition text-center ${
+                fotoLatoSx ? 'border-emerald-500 bg-emerald-50/50' : 'border-gray-200 bg-[#F8F9FB] hover:border-[#E05353]'
+              }`}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => setFotoLatoSx(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+                {fotoLatoSx ? <Check className="w-6 h-6 text-emerald-600 mb-1" /> : <Camera className="w-6 h-6 text-[#E05353] mb-1" />}
+                <span className="text-xs font-bold text-gray-800">3. Fiancata SX</span>
+                <span className="text-[10px] text-gray-400 mt-0.5">{fotoLatoSx ? '✓ Acquisita' : 'Scatta foto'}</span>
+              </label>
+
+              {/* Foto 4: Lato Destro */}
+              <label className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition text-center ${
+                fotoLatoDx ? 'border-emerald-500 bg-emerald-50/50' : 'border-gray-200 bg-[#F8F9FB] hover:border-[#E05353]'
+              }`}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => setFotoLatoDx(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+                {fotoLatoDx ? <Check className="w-6 h-6 text-emerald-600 mb-1" /> : <Camera className="w-6 h-6 text-[#E05353] mb-1" />}
+                <span className="text-xs font-bold text-gray-800">4. Fiancata DX</span>
+                <span className="text-[10px] text-gray-400 mt-0.5">{fotoLatoDx ? '✓ Acquisita' : 'Scatta foto'}</span>
               </label>
             </div>
           </div>
 
-          {/* Stato Carrozzeria & Danni Preesistenti */}
-          <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
+          {/* Note & Segnalazioni */}
+          <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-2">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
-              3. Segnalazione Danni Carrozzeria (Opzionale)
+              3. Segnalazione Danni o Anomalie (Opzionale)
             </label>
-
             <textarea
               rows={2}
-              placeholder="Segnala graffi, ammaccature o spie accese..."
+              placeholder="es. Graffio su paraurti, spia motore accesa..."
               value={noteInizio}
               onChange={(e) => setNoteInizio(e.target.value)}
               className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-4 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#E05353]"
             />
-
-            <label className="border border-dashed border-gray-200 rounded-2xl p-3 flex items-center justify-center gap-2 cursor-pointer bg-[#F8F9FB] hover:bg-gray-100 transition">
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={(e) => setFotoDanni(e.target.files?.[0] || null)}
-                className="hidden"
-              />
-              <UploadCloud className="w-4 h-4 text-gray-500" />
-              <span className="text-xs font-bold text-gray-600">
-                {fotoDanni ? `✓ Foto Danno: ${fotoDanni.name}` : 'Scatta Foto Eventuale Danno'}
-              </span>
-            </label>
           </div>
 
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded-2xl font-black text-sm tracking-wider uppercase shadow-md flex items-center justify-center gap-2 transition-all"
+            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded-2xl font-black text-sm tracking-wider uppercase shadow-md flex flex-col items-center justify-center transition-all"
           >
             {submitting ? (
-              <>
+              <span className="flex items-center gap-2">
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Certificazione Watermark & Invio...
-              </>
+                {uploadProgressText}
+              </span>
             ) : (
-              <>
+              <span className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5" />
-                Conferma Check-in & Avvia Servizio
-              </>
+                Certifica 4 Lati & Inizia Turno
+              </span>
             )}
           </button>
         </form>
