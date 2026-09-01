@@ -264,10 +264,10 @@ export default function AdminDashboardPage() {
             </div>
 
             <Link
-              href="/spese"
+              href="/spese/analisi"
               className="text-xs font-bold text-[#E05353] hover:underline flex items-center gap-1"
             >
-              Apri Dettaglio Spese <ArrowUpRight className="w-4 h-4" />
+              Apri Analisi Spese & IA <ArrowUpRight className="w-4 h-4" />
             </Link>
           </div>
 
