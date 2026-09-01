@@ -20,7 +20,13 @@ import {
   Truck,
   BarChart3,
   TrendingUp,
-  Euro
+  Euro,
+  Camera,
+  ExternalLink,
+  MapPin,
+  Clock,
+  Eye,
+  Loader2
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -33,10 +39,15 @@ export default function AdminDashboardPage() {
   const [editTarga, setEditTarga] = useState('');
   const [editKmFine, setEditKmFine] = useState('');
 
+  // Modale Ispezione Foto Verbale
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [selectedTurno, setSelectedTurno] = useState<any | null>(null);
+  const [verbaliFoto, setVerbaliFoto] = useState<any[]>([]);
+  const [loadingFoto, setLoadingFoto] = useState(false);
+
   const fetchDati = async () => {
     setLoadingTurni(true);
     try {
-      // 1. Turni
       const { data: tData, error: tErr } = await supabase
         .from('turni_presenze')
         .select('*')
@@ -45,7 +56,6 @@ export default function AdminDashboardPage() {
       if (tErr) throw tErr;
       setTurni(tData || []);
 
-      // 2. Spese per grafico andamento
       const { data: sData, error: sErr } = await supabase
         .from('vehicle_expenses')
         .select('*')
@@ -64,6 +74,28 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     fetchDati();
   }, []);
+
+  const handleOpenPhotoInspection = async (turno: any) => {
+    setSelectedTurno(turno);
+    setIsPhotoModalOpen(true);
+    setLoadingFoto(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('verbali_foto')
+        .select('*')
+        .eq('turno_id', turno.id)
+        .order('data_ora', { ascending: true });
+
+      if (error) throw error;
+      setVerbaliFoto(data || []);
+    } catch (err: any) {
+      console.error('Errore recupero foto:', err);
+      setVerbaliFoto([]);
+    } finally {
+      setLoadingFoto(false);
+    }
+  };
 
   const handleAdminUpdate = async (turno: any) => {
     const kmNum = editKmFine ? Number(editKmFine) : null;
@@ -153,7 +185,6 @@ export default function AdminDashboardPage() {
   const kmTotaliRegistrati = turni.reduce((acc, t) => acc + (Number(t.km_percorsi) || 0), 0);
   const totaleSpeseRegistrate = spese.reduce((acc, s) => acc + Number(s.importo || 0), 0);
 
-  // Calcolo dati mensili per il Grafico Andamento
   const andamentoSpeseMensili = useMemo(() => {
     const map: { [key: string]: number } = {};
     spese.forEach((s) => {
@@ -296,7 +327,6 @@ export default function AdminDashboardPage() {
         {/* 4 MODULI GESTIONALI */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           
-          {/* Modulo 1: Flotta */}
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
             <div className="space-y-3">
               <div className="w-11 h-11 rounded-2xl bg-gray-100 text-gray-800 flex items-center justify-center">
@@ -319,7 +349,6 @@ export default function AdminDashboardPage() {
             </Link>
           </div>
 
-          {/* Modulo 2: Spese & Fatture */}
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
             <div className="space-y-3">
               <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
@@ -342,7 +371,6 @@ export default function AdminDashboardPage() {
             </Link>
           </div>
 
-          {/* Modulo 3: Personale & Autisti */}
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
             <div className="space-y-3">
               <div className="w-11 h-11 rounded-2xl bg-rose-50 text-[#E05353] flex items-center justify-center">
@@ -365,7 +393,6 @@ export default function AdminDashboardPage() {
             </Link>
           </div>
 
-          {/* Modulo 4: Buste Paga */}
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
             <div className="space-y-3">
               <div className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center">
@@ -390,12 +417,12 @@ export default function AdminDashboardPage() {
 
         </div>
 
-        {/* Registro Turni */}
+        {/* REGISTRO TURNI CON ISPEZIONE FOTO VERBALE */}
         <section className="bg-white rounded-3xl p-5 sm:p-6 border border-gray-100 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">Control Room</h2>
-              <p className="text-lg font-extrabold text-[#1E242B]">Registro Turni & Presenze</p>
+              <p className="text-lg font-extrabold text-[#1E242B]">Registro Turni, Presenze & Perizie Fotografiche</p>
             </div>
             <div className="flex items-center gap-2">
               <button 
@@ -418,7 +445,7 @@ export default function AdminDashboardPage() {
               <thead>
                 <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase text-[10px] tracking-wider">
                   <th className="pb-3">Data</th>
-                  <th className="pb-3">Codice</th>
+                  <th className="pb-3">Verbale & Perizia</th>
                   <th className="pb-3">Autista</th>
                   <th className="pb-3">Targa</th>
                   <th className="pb-3">Appalto</th>
@@ -441,7 +468,16 @@ export default function AdminDashboardPage() {
                       <td className="py-3 text-gray-500 whitespace-nowrap">
                         {new Date(turno.created_at).toLocaleDateString('it-IT')}
                       </td>
-                      <td className="py-3 font-mono text-[11px] font-bold text-gray-500">{turno.codice_verbale}</td>
+                      <td className="py-3">
+                        <button
+                          onClick={() => handleOpenPhotoInspection(turno)}
+                          className="font-mono text-[11px] font-bold text-[#E05353] bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded-lg flex items-center gap-1.5 transition"
+                          title="Clicca per visualizzare le 4 foto certificate del veicolo"
+                        >
+                          <Camera className="w-3.5 h-3.5" />
+                          <span>{turno.codice_verbale}</span>
+                        </button>
+                      </td>
                       <td className="py-3 font-bold text-gray-800 capitalize">{turno.nome_autista || 'Autista'}</td>
                       <td className="py-3 font-bold text-[#1E242B]">
                         {editingId === turno.id ? (
@@ -514,6 +550,13 @@ export default function AdminDashboardPage() {
                         ) : (
                           <div className="flex items-center justify-end gap-1">
                             <button
+                              onClick={() => handleOpenPhotoInspection(turno)}
+                              className="text-gray-400 hover:text-[#E05353] p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
+                              title="Ispeziona Foto"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            <button
                               onClick={() => {
                                 setEditingId(turno.id);
                                 setEditTarga(turno.targa_mezzo || '');
@@ -542,6 +585,87 @@ export default function AdminDashboardPage() {
           </div>
         </section>
       </main>
+
+      {/* MODALE ISPEZIONE VERBALE FOTOGRAFICO */}
+      {isPhotoModalOpen && selectedTurno && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-4xl w-full shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-base text-[#1E242B]">
+                    Verbale Fotografico {selectedTurno.codice_verbale}
+                  </h3>
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-rose-50 text-[#E05353]">
+                    {selectedTurno.targa_mezzo}
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  Conducente: <b className="text-gray-700 capitalize">{selectedTurno.nome_autista}</b> | Appalto: <b>{selectedTurno.appalto}</b>
+                </p>
+              </div>
+              <button 
+                onClick={() => setIsPhotoModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {loadingFoto ? (
+              <div className="py-16 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin text-[#E05353]" />
+                Recupero scatti ad alta risoluzione con filigrana...
+              </div>
+            ) : verbaliFoto.length === 0 ? (
+              <div className="py-12 text-center text-xs text-gray-400 bg-[#F8F9FB] rounded-2xl border border-dashed border-gray-200">
+                Nessuna foto perimetrale archiviata per questo turno.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {verbaliFoto.map((foto) => (
+                    <div key={foto.id} className="bg-[#F8F9FB] border border-gray-200 rounded-2xl overflow-hidden flex flex-col justify-between">
+                      <div className="relative group">
+                        <img 
+                          src={foto.foto_url} 
+                          alt={foto.tipo_foto}
+                          className="w-full h-56 object-cover bg-black"
+                        />
+                        <a
+                          href={foto.foto_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="absolute top-3 right-3 bg-black/70 hover:bg-black text-white p-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow transition"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" /> Ingrandisci
+                        </a>
+                      </div>
+
+                      <div className="p-3 bg-white border-t border-gray-100 flex items-center justify-between text-xs">
+                        <div>
+                          <span className="font-extrabold text-[#1E242B] capitalize block">
+                            {foto.tipo_foto.replace('_', ' ').toUpperCase()}
+                          </span>
+                          <span className="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5">
+                            <Clock className="w-3 h-3" />
+                            {new Date(foto.data_ora).toLocaleString('it-IT')}
+                          </span>
+                        </div>
+                        {foto.coordinate_gps && (
+                          <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md border border-emerald-200 flex items-center gap-1">
+                            <MapPin className="w-3 h-3" /> {foto.coordinate_gps}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
