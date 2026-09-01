@@ -13,19 +13,15 @@ import {
   ShieldCheck, 
   Calendar, 
   Gauge, 
-  AlertTriangle, 
   X, 
   Loader2,
-  CheckCircle2,
-  AlertCircle,
   FileText,
-  Wrench,
   ChevronRight,
-  Edit3,
   Check,
   Camera,
   Eye,
-  ExternalLink
+  ExternalLink,
+  AlertCircle
 } from 'lucide-react';
 
 export default function FlottaPage() {
@@ -35,24 +31,20 @@ export default function FlottaPage() {
   const [ricerca, setRicerca] = useState('');
   const [filtroStato, setFiltroStato] = useState('TUTTI');
 
-  // Scheda Dettaglio Furgone Selezionato
+  // Scheda Furgone Selezionato
   const [selectedVeicolo, setSelectedVeicolo] = useState<any | null>(null);
-  const [storicoTurniMezzo, setStoricoTurniMezzo] = useState<any[]>([]);
-  const [loadingDettaglio, setLoadingDettaglio] = useState(false);
-
-  // Modifica Rapida Km / Note / Scadenze
   const [editKm, setEditKm] = useState('');
   const [editNote, setEditNote] = useState('');
   const [editAssicurazione, setEditAssicurazione] = useState('');
   const [editRevisione, setEditRevisione] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
-  // Upload Documenti Mezzo
+  // Upload Foto Documenti
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [docModalUrl, setDocModalUrl] = useState<string | null>(null);
   const [docModalTitolo, setDocModalTitolo] = useState<string>('');
 
-  // Modale Nuovo Veicolo
+  // Modale Aggiungi Furgone
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [targa, setTarga] = useState('');
   const [modello, setModello] = useState('');
@@ -74,7 +66,7 @@ export default function FlottaPage() {
       if (error) throw error;
       setVeicoli(data || []);
     } catch (err: any) {
-      console.error('Errore caricamento veicoli:', err);
+      console.error('Errore recupero veicoli:', err);
     } finally {
       setLoading(false);
     }
@@ -85,32 +77,15 @@ export default function FlottaPage() {
   }, []);
 
   // Apertura Scheda Furgone
-  const handleOpenScheda = async (veicolo: any) => {
+  const handleOpenScheda = (veicolo: any) => {
     setSelectedVeicolo(veicolo);
     setEditKm(veicolo.km_attuali?.toString() || '');
     setEditNote(veicolo.note || '');
     setEditAssicurazione(veicolo.scadenza_assicurazione || '');
     setEditRevisione(veicolo.scadenza_revisione || '');
-    setLoadingDettaglio(true);
-
-    try {
-      const { data: turniData } = await supabase
-        .from('turni_presenze')
-        .select('*')
-        .eq('targa_mezzo', veicolo.targa)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      setStoricoTurniMezzo(turniData || []);
-    } catch (err) {
-      console.error('Errore recupero storico mezzo:', err);
-      setStoricoTurniMezzo([]);
-    } finally {
-      setLoadingDettaglio(false);
-    }
   };
 
-  // Upload Foto Documento del Mezzo
+  // Upload Foto Documento del Mezzo (Libretto, Assicurazione, Revisione)
   const handleUploadDocMezzo = async (file: File, tipo: 'foto_libretto' | 'foto_assicurazione' | 'foto_revisione') => {
     if (!selectedVeicolo) return;
     setUploadingDoc(tipo);
@@ -135,9 +110,9 @@ export default function FlottaPage() {
       const aggiornato = { ...selectedVeicolo, [tipo]: url };
       setSelectedVeicolo(aggiornato);
       setVeicoli(veicoli.map(v => v.id === aggiornato.id ? aggiornato : v));
-      alert('Documento caricato con successo!');
+      alert('Documento salvato!');
     } catch (err: any) {
-      alert(`Errore caricamento documento: ${err.message}`);
+      alert(`Errore caricamento: ${err.message}`);
     } finally {
       setUploadingDoc(null);
     }
@@ -171,7 +146,7 @@ export default function FlottaPage() {
 
       setSelectedVeicolo(aggiornato);
       setVeicoli(veicoli.map(v => v.id === aggiornato.id ? aggiornato : v));
-      alert('Scheda furgone aggiornata con successo!');
+      alert('Scheda furgone salvata!');
     } catch (err: any) {
       alert(`Errore salvataggio: ${err.message}`);
     } finally {
@@ -179,7 +154,7 @@ export default function FlottaPage() {
     }
   };
 
-  // Aggiornamento Stato Veicolo
+  // Cambio Stato Veicolo (Disponibile / In Uso / Manutenzione / Fermo)
   const handleUpdateStato = async (id: string, nuovoStato: string) => {
     try {
       const { error } = await supabase
@@ -198,9 +173,9 @@ export default function FlottaPage() {
     }
   };
 
-  // Eliminazione Veicolo
+  // CANCELLAZIONE DEFINITIVA VEICOLO
   const handleDeleteVeicolo = async (id: string, targaMezzo: string) => {
-    const conferma = window.confirm(`ATTENZIONE: Sei sicuro di voler eliminare definitivamente il furgone targa ${targaMezzo}? L'operazione è irreversibile.`);
+    const conferma = window.confirm(`Vuoi davvero eliminare il veicolo ${targaMezzo} dalla flotta? L'azione è definitiva.`);
     if (!conferma) return;
 
     try {
@@ -211,11 +186,12 @@ export default function FlottaPage() {
 
       if (error) throw error;
 
-      setVeicoli(veicoli.filter(v => v.id !== id));
+      // Rimozione immediata dallo stato locale
+      setVeicoli(prev => prev.filter(v => v.id !== id));
       if (selectedVeicolo?.id === id) setSelectedVeicolo(null);
-      alert(`Veicolo ${targaMezzo} eliminato dalla flotta.`);
+      alert(`Furgone ${targaMezzo} eliminato con successo!`);
     } catch (err: any) {
-      alert(`Errore eliminazione veicolo: ${err.message}`);
+      alert(`Errore eliminazione: ${err.message}`);
     }
   };
 
@@ -226,7 +202,7 @@ export default function FlottaPage() {
     setSubmitting(true);
 
     try {
-      if (!targa) throw new Error('Inserisci la targa del veicolo.');
+      if (!targa) throw new Error('La targa è obbligatoria.');
 
       const { error } = await supabase.from('veicoli').insert([
         {
@@ -249,9 +225,9 @@ export default function FlottaPage() {
       setScadenzaRevisione('');
       setIsModalOpen(false);
       fetchVeicoli();
-      alert('Veicolo aggiunto alla flotta con successo!');
+      alert('Veicolo aggiunto alla flotta!');
     } catch (err: any) {
-      setModalError(err.message || 'Errore salvataggio veicolo.');
+      setModalError(err.message || 'Errore durante la creazione.');
     } finally {
       setSubmitting(false);
     }
@@ -274,26 +250,26 @@ export default function FlottaPage() {
             <button 
               type="button"
               onClick={() => router.push('/')}
-              className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
+              className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
             <div>
               <h1 className="font-extrabold text-base tracking-tight">Gestione Flotta Mezzi</h1>
-              <p className="text-[11px] text-gray-400 font-medium">Schede Furgoni, Libretti, Assicurazioni e Revisioni</p>
+              <p className="text-[11px] text-gray-400 font-medium">Schede Furgoni, Libretti, Assicurazioni e Controllo Stato</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button 
               onClick={fetchVeicoli}
-              className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
+              className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#E05353]' : ''}`} />
             </button>
             <button 
               onClick={() => setIsModalOpen(true)}
-              className="h-10 px-4 rounded-2xl bg-[#E05353] hover:bg-[#c94545] text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all"
+              className="h-10 px-4 rounded-2xl bg-[#E05353] hover:bg-[#c94545] text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
             >
               <Plus className="w-4 h-4" /> Aggiungi Furgone
             </button>
@@ -302,7 +278,7 @@ export default function FlottaPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-8 pt-6 space-y-6">
-        {/* Barra di Ricerca & Filtri Stato */}
+        {/* Barra di Ricerca & Filtri */}
         <div className="bg-white rounded-3xl p-4 border border-gray-100 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
           <div className="relative w-full sm:w-80">
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -320,7 +296,7 @@ export default function FlottaPage() {
               <button
                 key={s}
                 onClick={() => setFiltroStato(s)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition whitespace-nowrap ${
                   filtroStato === s
                     ? 'bg-[#1E242B] text-white shadow-sm'
                     : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
@@ -332,22 +308,22 @@ export default function FlottaPage() {
           </div>
         </div>
 
-        {/* Griglia Furgoni */}
+        {/* Griglia Furgoni con Scheda Furgone e Tasto Elimina */}
         {loading ? (
           <div className="py-20 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-[#E05353]" />
-            Caricamento flotta aziendale...
+            Caricamento flotta...
           </div>
         ) : veicoliFiltrati.length === 0 ? (
           <div className="py-16 text-center text-xs text-gray-400 bg-white rounded-3xl border border-gray-100">
-            Nessun furgone trovato. Clicca su "+ Aggiungi Furgone" per inserire un veicolo.
+            Nessun furgone presente. Clicca su "+ Aggiungi Furgone" per inserire il primo mezzo.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {veicoliFiltrati.map((veicolo) => (
               <div 
                 key={veicolo.id}
-                className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between space-y-4 hover:shadow-md transition-shadow"
+                className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between space-y-4 hover:shadow-md transition"
               >
                 <div>
                   <div className="flex items-center justify-between">
@@ -355,7 +331,7 @@ export default function FlottaPage() {
                       {veicolo.targa}
                     </span>
 
-                    {/* Stato Veicolo */}
+                    {/* Menu Stato Mezzo */}
                     <select
                       value={veicolo.stato || 'disponibile'}
                       onChange={(e) => handleUpdateStato(veicolo.id, e.target.value)}
@@ -368,7 +344,7 @@ export default function FlottaPage() {
                     >
                       <option value="disponibile">● DISPONIBILE</option>
                       <option value="in_uso">● IN USO</option>
-                      <option value="in_manutenzione">● IN MANUTENZIONE</option>
+                      <option value="in_manutenzione">● MANUTENZIONE</option>
                       <option value="fermo">● FERMO</option>
                     </select>
                   </div>
@@ -402,21 +378,21 @@ export default function FlottaPage() {
                   </div>
                 </div>
 
-                {/* Tasti Azione: Apri Scheda Furgone + Elimina */}
+                {/* Tasti Azione: Scheda Furgone + Elimina */}
                 <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
                   <button
                     onClick={() => handleDeleteVeicolo(veicolo.id, veicolo.targa)}
-                    className="text-xs font-bold text-gray-400 hover:text-rose-600 p-1.5 rounded-xl hover:bg-rose-50 transition"
-                    title="Elimina veicolo"
+                    className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
+                    title="Elimina veicolo definitivamente"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
 
                   <button
                     onClick={() => handleOpenScheda(veicolo)}
-                    className="px-3 py-1.5 bg-[#1E242B] hover:bg-black text-white text-xs font-bold rounded-xl flex items-center gap-1 transition shadow-sm"
+                    className="px-3.5 py-2 bg-[#1E242B] hover:bg-black text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition shadow-sm"
                   >
-                    <span>Scheda Furgone & Documenti</span>
+                    <span>Scheda Furgone</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -426,7 +402,7 @@ export default function FlottaPage() {
         )}
       </main>
 
-      {/* 🟢 SCHEDA DETTAGLIO FURGONE CON UPLOAD FOTO DOCUMENTI */}
+      {/* 🟢 SCHEDA DETTAGLIO FURGONE (MODALE CON FOTO DOCUMENTI) */}
       {selectedVeicolo && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 max-w-2xl w-full shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
@@ -450,7 +426,7 @@ export default function FlottaPage() {
               </button>
             </div>
 
-            {/* Stato e Controlli Rapidi */}
+            {/* Stato e Chilometri */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-4 bg-[#F8F9FB] rounded-2xl space-y-2">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Stato Operativo</span>
@@ -459,7 +435,7 @@ export default function FlottaPage() {
                   onChange={(e) => handleUpdateStato(selectedVeicolo.id, e.target.value)}
                   className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold uppercase focus:outline-none focus:ring-2 focus:ring-[#E05353]"
                 >
-                  <option value="disponibile">🟢 DISPONIBILE (Pronto al servizio)</option>
+                  <option value="disponibile">🟢 DISPONIBILE (Pronto)</option>
                   <option value="in_uso">🟡 IN USO (Turno attivo)</option>
                   <option value="in_manutenzione">🔵 IN MANUTENZIONE (Officina)</option>
                   <option value="fermo">🔴 FERMO (Non utilizzabile)</option>
@@ -467,7 +443,7 @@ export default function FlottaPage() {
               </div>
 
               <div className="p-4 bg-[#F8F9FB] rounded-2xl space-y-2">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Chilometraggio Odometrico</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Chilometraggio Mezzo</span>
                 <input
                   type="number"
                   value={editKm}
@@ -477,7 +453,7 @@ export default function FlottaPage() {
               </div>
             </div>
 
-            {/* 📸 SEZIONE FOTO DOCUMENTI VEICOLO (Libretto, Assicurazione, Revisione) */}
+            {/* 📸 SEZIONE FOTO DOCUMENTI: LIBRETTO, ASSICURAZIONE, REVISIONE */}
             <div className="p-4 bg-white border border-gray-200 rounded-2xl space-y-3">
               <span className="text-[11px] font-extrabold text-[#1E242B] uppercase tracking-wider block">
                 Foto Documenti Furgone
@@ -601,7 +577,7 @@ export default function FlottaPage() {
               )}
             </div>
 
-            {/* Date di Scadenza Modificabili */}
+            {/* Scadenze Modificabili */}
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div>
                 <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Scad. Assicurazione</label>
@@ -623,12 +599,12 @@ export default function FlottaPage() {
               </div>
             </div>
 
-            {/* Note Mezzo */}
+            {/* Note Officina / Manutenzioni */}
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Note / Manutenzioni / Officina</label>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Note Officina / Tagliandi</label>
               <textarea
                 rows={2}
-                placeholder="es. Tagliando eseguito, gomme invernali montate a 115.000 km..."
+                placeholder="es. Tagliando eseguito a 110.000 km, freni nuovi..."
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
                 className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl p-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#E05353]"
@@ -645,32 +621,6 @@ export default function FlottaPage() {
               {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 text-emerald-400" />}
               Salva Modifiche Scheda Furgone
             </button>
-
-            {/* Storico Ultimi Turni */}
-            <div className="space-y-2 pt-2 border-t border-gray-100">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Ultimi Autisti che hanno guidato questo mezzo</span>
-              {loadingDettaglio ? (
-                <div className="py-6 text-center text-xs text-gray-400">Caricamento cronologia turni...</div>
-              ) : storicoTurniMezzo.length === 0 ? (
-                <div className="py-4 text-center text-xs text-gray-400 bg-[#F8F9FB] rounded-xl">
-                  Nessun turno registrato per questo veicolo.
-                </div>
-              ) : (
-                <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                  {storicoTurniMezzo.map((t) => (
-                    <div key={t.id} className="p-2.5 bg-[#F8F9FB] rounded-xl flex items-center justify-between text-xs">
-                      <div>
-                        <span className="font-bold text-gray-800 capitalize">{t.nome_autista || 'Autista'}</span>
-                        <span className="text-[10px] text-gray-400 block">{new Date(t.created_at).toLocaleDateString('it-IT')} - {t.codice_verbale}</span>
-                      </div>
-                      <span className="font-mono font-bold text-emerald-600">
-                        {t.km_percorsi ? `+${t.km_percorsi} km` : 'In corso'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
             {/* Footer con Eliminazione */}
             <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
@@ -729,7 +679,7 @@ export default function FlottaPage() {
         </div>
       )}
 
-      {/* MODALE INSERIMENTO NUOVO MEZZO */}
+      {/* MODALE AGGIUNGI FURGONE */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
