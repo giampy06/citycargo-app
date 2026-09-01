@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/supabase';
 import { 
   Truck, 
@@ -15,8 +16,8 @@ import {
   X, 
   Loader2, 
   AlertCircle, 
-  ChevronRight,
-  Receipt
+  ExternalLink,
+  ChevronRight
 } from 'lucide-react';
 
 export default function FlottaPage() {
@@ -111,17 +112,12 @@ export default function FlottaPage() {
       setIsModalOpen(false);
 
       fetchVeicoli();
-      alert('Veicolo aggiunto con successo!');
+      alert('Veicolo aggiunto alla flotta con successo!');
     } catch (err: any) {
       setModalError(err.message || 'Errore durante il salvataggio.');
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const apriSchedaFurgone = (targaMezzo: string) => {
-    if (!targaMezzo) return;
-    router.push(`/flotta/${encodeURIComponent(targaMezzo.trim())}`);
   };
 
   const veicoliFiltrati = veicoli.filter(v => {
@@ -146,7 +142,7 @@ export default function FlottaPage() {
             </button>
             <div>
               <h1 className="font-extrabold text-base tracking-tight">Gestione Flotta & Scadenze</h1>
-              <p className="text-[11px] text-gray-400 font-medium">Tocca un mezzo per aprire fatture e manutenzione</p>
+              <p className="text-[11px] text-gray-400 font-medium">Schede Tecniche, Manutenzioni e Costi</p>
             </div>
           </div>
 
@@ -214,8 +210,7 @@ export default function FlottaPage() {
               return (
                 <div 
                   key={veicolo.id || veicolo.targa} 
-                  onClick={() => apriSchedaFurgone(veicolo.targa)}
-                  className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between space-y-4 hover:shadow-lg hover:border-red-200 transition-all cursor-pointer group"
+                  className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between space-y-4 hover:shadow-lg transition-all"
                 >
                   <div>
                     <div className="flex items-center justify-between">
@@ -231,14 +226,9 @@ export default function FlottaPage() {
                       </span>
                     </div>
 
-                    <div className="mt-3 flex items-center justify-between">
-                      <div>
-                        <h2 className="text-xl font-black text-[#1E242B] group-hover:text-[#E05353] transition-colors">{veicolo.targa}</h2>
-                        <p className="text-xs text-gray-500 font-medium">{veicolo.modello || 'Furgone Aziendale'}</p>
-                      </div>
-                      <div className="w-8 h-8 rounded-xl bg-gray-50 group-hover:bg-red-50 flex items-center justify-center text-gray-400 group-hover:text-[#E05353] transition-all">
-                        <ChevronRight className="w-5 h-5" />
-                      </div>
+                    <div className="mt-3">
+                      <h2 className="text-xl font-black text-[#1E242B]">{veicolo.targa}</h2>
+                      <p className="text-xs text-gray-500 font-medium">{veicolo.modello || 'Furgone Aziendale'}</p>
                     </div>
 
                     <div className="mt-3 p-3 bg-[#F8F9FB] rounded-2xl flex items-center justify-between text-xs">
@@ -276,19 +266,15 @@ export default function FlottaPage() {
                     </div>
                   </div>
 
-                  {/* Pulsante Esplicito */}
+                  {/* Pulsante Apri Scheda Singola */}
                   <div className="pt-3 border-t border-gray-100">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        apriSchedaFurgone(veicolo.targa);
-                      }}
-                      className="w-full py-2.5 px-4 bg-[#1E242B] hover:bg-black text-white text-xs font-bold rounded-2xl flex items-center justify-center gap-2 transition-all shadow-sm"
+                    <Link
+                      href={`/flotta/${veicolo.targa}`}
+                      className="w-full py-3 px-4 bg-[#1E242B] hover:bg-black text-white text-xs font-extrabold rounded-2xl flex items-center justify-center gap-2 transition-all shadow-sm"
                     >
-                      <Receipt className="w-3.5 h-3.5 text-[#E05353]" />
-                      Apri Scheda, Costi & Fatture
-                    </button>
+                      <span>Apri Scheda Furgone & Fatture</span>
+                      <ChevronRight className="w-4 h-4 text-[#E05353]" />
+                    </Link>
                   </div>
                 </div>
               );
