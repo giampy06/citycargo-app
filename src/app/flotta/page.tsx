@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/supabase';
 import { 
   Truck, 
@@ -14,7 +15,8 @@ import {
   RefreshCw,
   X,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  ExternalLink
 } from 'lucide-react';
 
 export default function FlottaPage() {
@@ -59,6 +61,7 @@ export default function FlottaPage() {
   }, []);
 
   const getScadenzaStatus = (dataStr: string) => {
+    if (!dataStr) return { label: 'Non impostata', color: 'bg-gray-50 text-gray-500 border-gray-200' };
     const oggi = new Date('2026-09-01');
     const scadenza = new Date(dataStr);
     const diffGiorni = Math.ceil((scadenza.getTime() - oggi.getTime()) / (1000 * 60 * 60 * 24));
@@ -69,6 +72,7 @@ export default function FlottaPage() {
   };
 
   const getTagliandoStatus = (kmAtt: number, kmTagl: number) => {
+    if (!kmTagl) return { label: 'Non impostato', color: 'bg-gray-50 text-gray-500 border-gray-200' };
     const deltaKm = kmTagl - kmAtt;
     if (deltaKm <= 0) return { label: `Tagliando Scaduto (+${Math.abs(deltaKm)} km)`, color: 'bg-rose-50 text-[#E05353] border-rose-200' };
     if (deltaKm <= 1500) return { label: `Tagliando tra ${deltaKm} km`, color: 'bg-amber-50 text-amber-700 border-amber-200' };
@@ -88,17 +92,16 @@ export default function FlottaPage() {
             targa: targa.trim().toUpperCase(),
             modello: modello.trim(),
             appalto_default: appaltoDefault,
-            km_attuali: Number(kmAttuali),
-            data_scadenza_assicurazione: dataAssicurazione,
-            data_scadenza_revisione: dataRevisione,
-            km_prossimo_tagliando: Number(kmTagliando),
+            km_attuali: Number(kmAttuali) || 0,
+            data_scadenza_assicurazione: dataAssicurazione || null,
+            data_scadenza_revisione: dataRevisione || null,
+            km_prossimo_tagliando: Number(kmTagliando) || 0,
             stato: 'disponibile',
           },
         ]);
 
       if (error) throw error;
 
-      // Reset form
       setTarga('');
       setModello('');
       setKmAttuali('');
@@ -119,13 +122,13 @@ export default function FlottaPage() {
   const veicoliFiltrati = veicoli.filter(v => {
     const matchAppalto = filtroAppalto === 'TUTTI' || v.appalto_default === filtroAppalto;
     const matchRicerca = v.targa.toLowerCase().includes(ricerca.toLowerCase()) || 
-                         v.modello.toLowerCase().includes(ricerca.toLowerCase());
+                         (v.modello && v.modello.toLowerCase().includes(ricerca.toLowerCase()));
     return matchAppalto && matchRicerca;
   });
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] pb-20 antialiased">
-      {/* Header Sticky */}
+      {/* Header */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-30 px-4 py-3 sm:px-8">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -138,7 +141,7 @@ export default function FlottaPage() {
             </button>
             <div>
               <h1 className="font-extrabold text-base tracking-tight">Gestione Flotta & Scadenze</h1>
-              <p className="text-[11px] text-gray-400 font-medium">Controllo Manutenzioni e Assicurazioni</p>
+              <p className="text-[11px] text-gray-400 font-medium">Controllo Manutenzioni, Spese e Assicurazioni</p>
             </div>
           </div>
 
@@ -190,82 +193,96 @@ export default function FlottaPage() {
           </div>
         </div>
 
-        {/* Schede Veicoli */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {veicoliFiltrati.map((veicolo) => {
-            const assStatus = getScadenzaStatus(veicolo.data_scadenza_assicurazione);
-            const revStatus = getScadenzaStatus(veicolo.data_scadenza_revisione);
-            const tagStatus = getTagliandoStatus(veicolo.km_attuali, veicolo.km_prossimo_tagliando);
+        {/* Griglia Veicoli */}
+        {loading ? (
+          <div className="py-20 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-[#E05353]" />
+            Caricamento flotta in corso...
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {veicoliFiltrati.map((veicolo) => {
+              const assStatus = getScadenzaStatus(veicolo.data_scadenza_assicurazione);
+              const revStatus = getScadenzaStatus(veicolo.data_scadenza_revisione);
+              const tagStatus = getTagliandoStatus(veicolo.km_attuali, veicolo.km_prossimo_tagliando);
 
-            return (
-              <div key={veicolo.id} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between space-y-4 hover:shadow-md transition-shadow">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-lg bg-rose-50 text-[#E05353]">
-                      {veicolo.appalto_default}
-                    </span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      veicolo.stato === 'disponibile' ? 'bg-emerald-50 text-emerald-700' :
-                      veicolo.stato === 'in_servizio' ? 'bg-blue-50 text-blue-700' : 'bg-rose-50 text-[#E05353]'
-                    }`}>
-                      ● {veicolo.stato.replace('_', ' ').toUpperCase()}
-                    </span>
-                  </div>
-
-                  <div className="mt-3">
-                    <h2 className="text-xl font-black text-[#1E242B] tracking-tight">{veicolo.targa}</h2>
-                    <p className="text-xs text-gray-500 font-medium">{veicolo.modello}</p>
-                  </div>
-
-                  <div className="mt-3 p-3 bg-[#F8F9FB] rounded-2xl flex items-center justify-between text-xs">
-                    <span className="text-gray-500 font-semibold">Chilometraggio:</span>
-                    <span className="font-extrabold text-[#1E242B]">{Number(veicolo.km_attuali).toLocaleString('it-IT')} km</span>
-                  </div>
-
-                  <div className="mt-4 space-y-2 text-xs">
+              return (
+                <div key={veicolo.id || veicolo.targa} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between space-y-4 hover:shadow-md transition-shadow">
+                  <div>
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-500 flex items-center gap-1.5 font-medium">
-                        <ShieldCheck className="w-3.5 h-3.5 text-gray-400" /> Assicurazione:
+                      <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-lg bg-rose-50 text-[#E05353]">
+                        {veicolo.appalto_default}
                       </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${assStatus.color}`}>
-                        {assStatus.label}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        veicolo.stato === 'disponibile' ? 'bg-emerald-50 text-emerald-700' :
+                        veicolo.stato === 'in_servizio' ? 'bg-blue-50 text-blue-700' :
+                        veicolo.stato === 'manutenzione' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-[#E05353]'
+                      }`}>
+                        ● {veicolo.stato ? veicolo.stato.replace('_', ' ').toUpperCase() : 'ATTIVO'}
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-500 flex items-center gap-1.5 font-medium">
-                        <Calendar className="w-3.5 h-3.5 text-gray-400" /> Revisione:
-                      </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${revStatus.color}`}>
-                        {revStatus.label}
-                      </span>
+                    <div className="mt-3">
+                      <h2 className="text-xl font-black text-[#1E242B] tracking-tight">{veicolo.targa}</h2>
+                      <p className="text-xs text-gray-500 font-medium">{veicolo.modello || 'Furgone Aziendale'}</p>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-500 flex items-center gap-1.5 font-medium">
-                        <Wrench className="w-3.5 h-3.5 text-gray-400" /> Tagliando:
-                      </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${tagStatus.color}`}>
-                        {tagStatus.label}
-                      </span>
+                    <div className="mt-3 p-3 bg-[#F8F9FB] rounded-2xl flex items-center justify-between text-xs">
+                      <span className="text-gray-500 font-semibold">Chilometraggio:</span>
+                      <span className="font-extrabold text-[#1E242B]">{Number(veicolo.km_attuali || 0).toLocaleString('it-IT')} km</span>
                     </div>
+
+                    <div className="mt-4 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500 flex items-center gap-1.5 font-medium">
+                          <ShieldCheck className="w-3.5 h-3.5 text-gray-400" /> Assicurazione:
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${assStatus.color}`}>
+                          {assStatus.label}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500 flex items-center gap-1.5 font-medium">
+                          <Calendar className="w-3.5 h-3.5 text-gray-400" /> Revisione:
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${revStatus.color}`}>
+                          {revStatus.label}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500 flex items-center gap-1.5 font-medium">
+                          <Wrench className="w-3.5 h-3.5 text-gray-400" /> Tagliando:
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${tagStatus.color}`}>
+                          {tagStatus.label}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pulsante Apri Scheda Mezzo */}
+                  <div className="pt-3 border-t border-gray-100">
+                    <Link
+                      href={`/flotta/${veicolo.targa}`}
+                      className="w-full py-2.5 px-4 bg-[#1E242B] hover:bg-black text-white text-xs font-bold rounded-2xl flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-[#E05353]" />
+                      Scheda Tecnica & Fatture
+                    </Link>
                   </div>
                 </div>
-
-                <div className="pt-2 border-t border-gray-50 flex items-center justify-between text-[11px] text-gray-400 font-medium">
-                  <span>Stato Flotta</span>
-                  <span className="font-bold text-[#1E242B]">Attivo</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </main>
 
-      {/* MODALE INSERIMENTO NUOVO VEICOLO */}
+      {/* MODALE NUOVO VEICOLO */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-base text-[#1E242B]">Nuovo Veicolo Flotta</h3>
@@ -343,7 +360,6 @@ export default function FlottaPage() {
                   <label className="text-[11px] font-bold text-gray-600 block mb-1">Km Pross. Tagliando</label>
                   <input
                     type="number"
-                    required
                     placeholder="es. 110000"
                     value={kmTagliando}
                     onChange={(e) => setKmTagliando(e.target.value)}
@@ -357,7 +373,6 @@ export default function FlottaPage() {
                   <label className="text-[11px] font-bold text-gray-600 block mb-1">Scad. Assicurazione</label>
                   <input
                     type="date"
-                    required
                     value={dataAssicurazione}
                     onChange={(e) => setDataAssicurazione(e.target.value)}
                     className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
@@ -368,7 +383,6 @@ export default function FlottaPage() {
                   <label className="text-[11px] font-bold text-gray-600 block mb-1">Scad. Revisione</label>
                   <input
                     type="date"
-                    required
                     value={dataRevisione}
                     onChange={(e) => setDataRevisione(e.target.value)}
                     className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
