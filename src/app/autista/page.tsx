@@ -12,19 +12,18 @@ import {
   FileText, 
   LogOut, 
   Clock, 
-  Gauge, 
-  ShieldCheck, 
+  ShieldAlert,
+  TrendingUp, 
   PlusCircle, 
   Loader2,
-  ChevronRight,
-  Euro,
-  TrendingUp
+  ChevronRight
 } from 'lucide-react';
 
 export default function AutistaHomePage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [statoAutista, setStatoAutista] = useState<string>('attivo');
 
   // Turni di oggi
   const [turnoAperto, setTurnoAperto] = useState<any | null>(null);
@@ -42,6 +41,26 @@ export default function AutistaHomePage() {
         return;
       }
       setUser(session.user);
+
+      // Controllo stato approvazione admin
+      const { data: autistaProfilo } = await supabase
+        .from('autisti')
+        .select('stato')
+        .eq('email', session.user.email?.toLowerCase())
+        .maybeSingle();
+
+      if (autistaProfilo && autistaProfilo.stato === 'in_attesa') {
+        setStatoAutista('in_attesa');
+        setLoading(false);
+        return;
+      }
+
+      if (autistaProfilo && autistaProfilo.stato === 'sospeso') {
+        setStatoAutista('sospeso');
+        setLoading(false);
+        return;
+      }
+
       await fetchDatiAutista(session.user.id);
     }
     init();
@@ -50,7 +69,6 @@ export default function AutistaHomePage() {
   const fetchDatiAutista = async (userId: string) => {
     setLoading(true);
     try {
-      // 1. Turni di oggi (dalle 00:00:00)
       const oggi = new Date();
       oggi.setHours(0, 0, 0, 0);
       const oggiISO = oggi.toISOString();
@@ -66,7 +84,6 @@ export default function AutistaHomePage() {
       setTurniOggi(turniOggiList);
       setTurnoAperto(turniOggiList.find((t) => t.stato === 'aperto') || null);
 
-      // 2. Calcolo Maturato Mese Corrente (dal 1° giorno del mese corrente)
       const primoDelMese = new Date(oggi.getFullYear(), oggi.getMonth(), 1).toISOString();
 
       const { data: dataMese } = await supabase
@@ -98,14 +115,64 @@ export default function AutistaHomePage() {
     return (
       <div className="min-h-screen bg-[#F8F9FB] flex items-center justify-center text-xs text-gray-500 font-bold">
         <Loader2 className="w-5 h-5 animate-spin mr-2 text-[#E05353]" />
-        Caricamento profilo autista...
+        Verifica autorizzazioni...
+      </div>
+    );
+  }
+
+  // SCHERMATA BLOCCO: SE L'AUTISTA NON È ANCORA STATO APPROVATO DALL'ADMIN
+  if (statoAutista === 'in_attesa') {
+    return (
+      <div className="min-h-screen bg-[#F8F9FB] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-amber-200 shadow-xl text-center space-y-4">
+          <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-3xl mx-auto flex items-center justify-center">
+            <Clock className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-black text-[#1E242B]">Account in Attesa di Approvazione</h2>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            La tua registrazione e le foto dei documenti sono state ricevute correttamente.
+            <br /><br />
+            L'amministrazione di <b>City Cargo</b> deve convalidare i tuoi dati prima di abilitarti ai turni e alla guida dei mezzi.
+          </p>
+          <div className="pt-4 border-t border-gray-100">
+            <button
+              onClick={handleLogout}
+              className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition"
+            >
+              Esci dall'Account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (statoAutista === 'sospeso') {
+    return (
+      <div className="min-h-screen bg-[#F8F9FB] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-rose-200 shadow-xl text-center space-y-4">
+          <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-3xl mx-auto flex items-center justify-center">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-black text-[#1E242B]">Profilo Sospeso</h2>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            Il tuo profilo conducente risulta momentaneamente disattivato. Contatta l'ufficio traffico di City Cargo.
+          </p>
+          <div className="pt-4 border-t border-gray-100">
+            <button
+              onClick={handleLogout}
+              className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition"
+            >
+              Esci dall'Account
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
   const nomeAutista = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Autista';
   const numeroTurnoProssimo = turniOggi.length + 1;
-
   const nomeMeseCorrente = new Date().toLocaleDateString('it-IT', { month: 'long' });
 
   return (
@@ -134,7 +201,7 @@ export default function AutistaHomePage() {
       </header>
 
       <main className="max-w-xl mx-auto px-4 pt-5 space-y-4">
-        {/* BLOCCO CIFRA MATURATA NEL MESE */}
+        {/* Maturato Mese */}
         <div className="bg-gradient-to-br from-[#1E242B] to-[#2C353F] text-white rounded-3xl p-5 shadow-lg relative overflow-hidden">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider capitalize">
@@ -163,7 +230,7 @@ export default function AutistaHomePage() {
           </div>
         </div>
 
-        {/* STATO OPERATIVO ATTUALE */}
+        {/* Turno Attuale */}
         {turnoAperto ? (
           <div className="bg-white text-[#1E242B] border border-amber-200 rounded-3xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
@@ -238,7 +305,7 @@ export default function AutistaHomePage() {
           </div>
         )}
 
-        {/* MENU RAPIDO SEZIONI */}
+        {/* Menu Rapido */}
         <div className="grid grid-cols-2 gap-3">
           <Link
             href="/autista/calendario"
@@ -266,51 +333,6 @@ export default function AutistaHomePage() {
             </div>
           </Link>
         </div>
-
-        {/* RIEPILOGO TURNI DI OGGI */}
-        {turniOggi.length > 0 && (
-          <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
-              Turni di Oggi ({turniOggi.length})
-            </h3>
-
-            <div className="space-y-2">
-              {turniOggi.map((t, index) => (
-                <div key={t.id} className="p-3 bg-[#F8F9FB] rounded-2xl flex items-center justify-between text-xs">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-[#1E242B]">Turno #{turniOggi.length - index}</span>
-                      <span className="font-bold text-gray-700">{t.targa_mezzo}</span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-[#E05353]">
-                        {t.appalto}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-gray-400 font-mono mt-0.5 block">{t.codice_verbale}</span>
-                  </div>
-
-                  <div className="text-right">
-                    {t.stato === 'aperto' ? (
-                      <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
-                        In corso
-                      </span>
-                    ) : (
-                      <div>
-                        <span className="text-xs font-extrabold text-emerald-600 block">
-                          +{t.km_percorsi || 0} km
-                        </span>
-                        {t.compenso_giornaliero > 0 && (
-                          <span className="text-[10px] font-bold text-gray-500">
-                            € {Number(t.compenso_giornaliero).toFixed(2)}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );
