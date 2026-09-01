@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { supabase } from '@/supabase';
 import { 
   Truck, 
@@ -11,12 +10,13 @@ import {
   Wrench, 
   ShieldCheck, 
   Plus, 
-  Search,
-  RefreshCw,
-  X,
-  Loader2,
-  AlertCircle,
-  ExternalLink
+  Search, 
+  RefreshCw, 
+  X, 
+  Loader2, 
+  AlertCircle, 
+  ChevronRight,
+  Receipt
 } from 'lucide-react';
 
 export default function FlottaPage() {
@@ -111,17 +111,22 @@ export default function FlottaPage() {
       setIsModalOpen(false);
 
       fetchVeicoli();
-      alert('Veicolo aggiunto alla flotta con successo!');
+      alert('Veicolo aggiunto con successo!');
     } catch (err: any) {
-      setModalError(err.message || 'Errore durante il salvataggio del veicolo.');
+      setModalError(err.message || 'Errore durante il salvataggio.');
     } finally {
       setSubmitting(false);
     }
   };
 
+  const apriSchedaFurgone = (targaMezzo: string) => {
+    if (!targaMezzo) return;
+    router.push(`/flotta/${encodeURIComponent(targaMezzo.trim())}`);
+  };
+
   const veicoliFiltrati = veicoli.filter(v => {
     const matchAppalto = filtroAppalto === 'TUTTI' || v.appalto_default === filtroAppalto;
-    const matchRicerca = v.targa.toLowerCase().includes(ricerca.toLowerCase()) || 
+    const matchRicerca = v.targa?.toLowerCase().includes(ricerca.toLowerCase()) || 
                          (v.modello && v.modello.toLowerCase().includes(ricerca.toLowerCase()));
     return matchAppalto && matchRicerca;
   });
@@ -141,7 +146,7 @@ export default function FlottaPage() {
             </button>
             <div>
               <h1 className="font-extrabold text-base tracking-tight">Gestione Flotta & Scadenze</h1>
-              <p className="text-[11px] text-gray-400 font-medium">Controllo Manutenzioni, Spese e Assicurazioni</p>
+              <p className="text-[11px] text-gray-400 font-medium">Tocca un mezzo per aprire fatture e manutenzione</p>
             </div>
           </div>
 
@@ -207,7 +212,11 @@ export default function FlottaPage() {
               const tagStatus = getTagliandoStatus(veicolo.km_attuali, veicolo.km_prossimo_tagliando);
 
               return (
-                <div key={veicolo.id || veicolo.targa} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between space-y-4 hover:shadow-md transition-shadow">
+                <div 
+                  key={veicolo.id || veicolo.targa} 
+                  onClick={() => apriSchedaFurgone(veicolo.targa)}
+                  className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between space-y-4 hover:shadow-lg hover:border-red-200 transition-all cursor-pointer group"
+                >
                   <div>
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-lg bg-rose-50 text-[#E05353]">
@@ -222,9 +231,14 @@ export default function FlottaPage() {
                       </span>
                     </div>
 
-                    <div className="mt-3">
-                      <h2 className="text-xl font-black text-[#1E242B] tracking-tight">{veicolo.targa}</h2>
-                      <p className="text-xs text-gray-500 font-medium">{veicolo.modello || 'Furgone Aziendale'}</p>
+                    <div className="mt-3 flex items-center justify-between">
+                      <div>
+                        <h2 className="text-xl font-black text-[#1E242B] group-hover:text-[#E05353] transition-colors">{veicolo.targa}</h2>
+                        <p className="text-xs text-gray-500 font-medium">{veicolo.modello || 'Furgone Aziendale'}</p>
+                      </div>
+                      <div className="w-8 h-8 rounded-xl bg-gray-50 group-hover:bg-red-50 flex items-center justify-center text-gray-400 group-hover:text-[#E05353] transition-all">
+                        <ChevronRight className="w-5 h-5" />
+                      </div>
                     </div>
 
                     <div className="mt-3 p-3 bg-[#F8F9FB] rounded-2xl flex items-center justify-between text-xs">
@@ -262,15 +276,19 @@ export default function FlottaPage() {
                     </div>
                   </div>
 
-                  {/* Pulsante Apri Scheda Mezzo */}
+                  {/* Pulsante Esplicito */}
                   <div className="pt-3 border-t border-gray-100">
-                    <Link
-                      href={`/flotta/${veicolo.targa}`}
-                      className="w-full py-2.5 px-4 bg-[#1E242B] hover:bg-black text-white text-xs font-bold rounded-2xl flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        apriSchedaFurgone(veicolo.targa);
+                      }}
+                      className="w-full py-2.5 px-4 bg-[#1E242B] hover:bg-black text-white text-xs font-bold rounded-2xl flex items-center justify-center gap-2 transition-all shadow-sm"
                     >
-                      <ExternalLink className="w-3.5 h-3.5 text-[#E05353]" />
-                      Scheda Tecnica & Fatture
-                    </Link>
+                      <Receipt className="w-3.5 h-3.5 text-[#E05353]" />
+                      Apri Scheda, Costi & Fatture
+                    </button>
                   </div>
                 </div>
               );
