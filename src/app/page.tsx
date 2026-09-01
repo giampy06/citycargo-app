@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/supabase';
 import { 
@@ -26,10 +27,15 @@ import {
   MapPin,
   Clock,
   Eye,
-  Loader2
+  Loader2,
+  LogOut
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
+  const router = useRouter();
+  const [authChecking, setAuthChecking] = useState(true);
+  const [adminUser, setAdminUser] = useState<any>(null);
+
   const [turni, setTurni] = useState<any[]>([]);
   const [spese, setSpese] = useState<any[]>([]);
   const [loadingTurni, setLoadingTurni] = useState(true);
@@ -44,6 +50,38 @@ export default function AdminDashboardPage() {
   const [selectedTurno, setSelectedTurno] = useState<any | null>(null);
   const [verbaliFoto, setVerbaliFoto] = useState<any[]>([]);
   const [loadingFoto, setLoadingFoto] = useState(false);
+
+  // Controllo Sicurezza Accesso Admin
+  useEffect(() => {
+    async function checkAdminAuth() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          router.replace('/login');
+          return;
+        }
+
+        const { data: profilo } = await supabase
+          .from('profili')
+          .select('ruolo, nome, cognome')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (profilo?.ruolo !== 'admin') {
+          await supabase.auth.signOut();
+          router.replace('/login');
+          return;
+        }
+
+        setAdminUser({ ...session.user, ...profilo });
+        setAuthChecking(false);
+        fetchDati();
+      } catch (err) {
+        router.replace('/login');
+      }
+    }
+    checkAdminAuth();
+  }, [router]);
 
   const fetchDati = async () => {
     setLoadingTurni(true);
@@ -71,9 +109,10 @@ export default function AdminDashboardPage() {
     }
   };
 
-  useEffect(() => {
-    fetchDati();
-  }, []);
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.replace('/login');
+  };
 
   const handleOpenPhotoInspection = async (turno: any) => {
     setSelectedTurno(turno);
@@ -205,6 +244,15 @@ export default function AdminDashboardPage() {
     }));
   }, [spese]);
 
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FB] flex items-center justify-center text-xs text-gray-500 font-bold">
+        <Loader2 className="w-5 h-5 animate-spin mr-2 text-[#E05353]" />
+        Verifica autorizzazione amministratore...
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] font-sans antialiased pb-24">
       {/* Navbar Admin */}
@@ -246,9 +294,14 @@ export default function AdminDashboardPage() {
             >
               <RefreshCw className={`w-4 h-4 ${loadingTurni ? 'animate-spin text-[#E05353]' : ''}`} />
             </button>
-            <div className="w-9 h-9 rounded-full bg-[#1E242B] text-white flex items-center justify-center font-bold text-xs">
-              AD
-            </div>
+            <button
+              onClick={handleLogout}
+              title="Disconnetti Admin"
+              className="h-9 px-3 rounded-full bg-gray-100 hover:bg-rose-50 hover:text-rose-600 text-gray-700 text-xs font-bold flex items-center gap-1.5 transition"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Esci
+            </button>
           </div>
         </div>
       </header>
