@@ -22,7 +22,10 @@ import {
   Wrench,
   ChevronRight,
   Edit3,
-  Check
+  Check,
+  Camera,
+  Eye,
+  ExternalLink
 } from 'lucide-react';
 
 export default function FlottaPage() {
@@ -37,10 +40,17 @@ export default function FlottaPage() {
   const [storicoTurniMezzo, setStoricoTurniMezzo] = useState<any[]>([]);
   const [loadingDettaglio, setLoadingDettaglio] = useState(false);
 
-  // Modifica Rapida Km / Note nella scheda
+  // Modifica Rapida Km / Note / Scadenze
   const [editKm, setEditKm] = useState('');
   const [editNote, setEditNote] = useState('');
+  const [editAssicurazione, setEditAssicurazione] = useState('');
+  const [editRevisione, setEditRevisione] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Upload Documenti Mezzo
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+  const [docModalUrl, setDocModalUrl] = useState<string | null>(null);
+  const [docModalTitolo, setDocModalTitolo] = useState<string>('');
 
   // Modale Nuovo Veicolo
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -79,6 +89,8 @@ export default function FlottaPage() {
     setSelectedVeicolo(veicolo);
     setEditKm(veicolo.km_attuali?.toString() || '');
     setEditNote(veicolo.note || '');
+    setEditAssicurazione(veicolo.scadenza_assicurazione || '');
+    setEditRevisione(veicolo.scadenza_revisione || '');
     setLoadingDettaglio(true);
 
     try {
@@ -98,6 +110,39 @@ export default function FlottaPage() {
     }
   };
 
+  // Upload Foto Documento del Mezzo
+  const handleUploadDocMezzo = async (file: File, tipo: 'foto_libretto' | 'foto_assicurazione' | 'foto_revisione') => {
+    if (!selectedVeicolo) return;
+    setUploadingDoc(tipo);
+
+    try {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `${selectedVeicolo.targa}/${tipo}_${Date.now()}.${ext}`;
+
+      const { error: upErr } = await supabase.storage.from('documenti-veicoli').upload(path, file);
+      if (upErr) throw upErr;
+
+      const { data: urlData } = supabase.storage.from('documenti-veicoli').getPublicUrl(path);
+      const url = urlData.publicUrl;
+
+      const { error: dbErr } = await supabase
+        .from('veicoli')
+        .update({ [tipo]: url })
+        .eq('id', selectedVeicolo.id);
+
+      if (dbErr) throw dbErr;
+
+      const aggiornato = { ...selectedVeicolo, [tipo]: url };
+      setSelectedVeicolo(aggiornato);
+      setVeicoli(veicoli.map(v => v.id === aggiornato.id ? aggiornato : v));
+      alert('Documento caricato con successo!');
+    } catch (err: any) {
+      alert(`Errore caricamento documento: ${err.message}`);
+    } finally {
+      setUploadingDoc(null);
+    }
+  };
+
   // Salva Modifiche dalla Scheda Furgone
   const handleSalvaDettagliScheda = async () => {
     if (!selectedVeicolo) return;
@@ -109,6 +154,8 @@ export default function FlottaPage() {
         .update({
           km_attuali: editKm ? Number(editKm) : selectedVeicolo.km_attuali,
           note: editNote.trim() || null,
+          scadenza_assicurazione: editAssicurazione || null,
+          scadenza_revisione: editRevisione || null,
         })
         .eq('id', selectedVeicolo.id);
 
@@ -118,6 +165,8 @@ export default function FlottaPage() {
         ...selectedVeicolo,
         km_attuali: editKm ? Number(editKm) : selectedVeicolo.km_attuali,
         note: editNote.trim() || null,
+        scadenza_assicurazione: editAssicurazione || null,
+        scadenza_revisione: editRevisione || null,
       };
 
       setSelectedVeicolo(aggiornato);
@@ -130,7 +179,7 @@ export default function FlottaPage() {
     }
   };
 
-  // Aggiornamento Stato Veicolo (Disponibile / In Manutenzione / Fermo / In Uso)
+  // Aggiornamento Stato Veicolo
   const handleUpdateStato = async (id: string, nuovoStato: string) => {
     try {
       const { error } = await supabase
@@ -231,7 +280,7 @@ export default function FlottaPage() {
             </button>
             <div>
               <h1 className="font-extrabold text-base tracking-tight">Gestione Flotta Mezzi</h1>
-              <p className="text-[11px] text-gray-400 font-medium">Schede Furgoni, Manutenzioni, Scadenze ed Eliminazione</p>
+              <p className="text-[11px] text-gray-400 font-medium">Schede Furgoni, Libretti, Assicurazioni e Revisioni</p>
             </div>
           </div>
 
@@ -283,7 +332,7 @@ export default function FlottaPage() {
           </div>
         </div>
 
-        {/* Griglia Furgoni con Click su Scheda */}
+        {/* Griglia Furgoni */}
         {loading ? (
           <div className="py-20 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-[#E05353]" />
@@ -367,7 +416,7 @@ export default function FlottaPage() {
                     onClick={() => handleOpenScheda(veicolo)}
                     className="px-3 py-1.5 bg-[#1E242B] hover:bg-black text-white text-xs font-bold rounded-xl flex items-center gap-1 transition shadow-sm"
                   >
-                    <span>Scheda Furgone</span>
+                    <span>Scheda Furgone & Documenti</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -377,7 +426,7 @@ export default function FlottaPage() {
         )}
       </main>
 
-      {/* 🟢 SCHEDA DETTAGLIO FURGONE (MODALE COMPLETA) */}
+      {/* 🟢 SCHEDA DETTAGLIO FURGONE CON UPLOAD FOTO DOCUMENTI */}
       {selectedVeicolo && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 max-w-2xl w-full shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
@@ -403,7 +452,7 @@ export default function FlottaPage() {
 
             {/* Stato e Controlli Rapidi */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 bg-[#F8F9FB] rounded-2xl space-y-3">
+              <div className="p-4 bg-[#F8F9FB] rounded-2xl space-y-2">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Stato Operativo</span>
                 <select
                   value={selectedVeicolo.stato || 'disponibile'}
@@ -418,71 +467,193 @@ export default function FlottaPage() {
               </div>
 
               <div className="p-4 bg-[#F8F9FB] rounded-2xl space-y-2">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Aggiorna Chilometraggio</span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    value={editKm}
-                    onChange={(e) => setEditKm(e.target.value)}
-                    className="flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-[#1E242B] focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSalvaDettagliScheda}
-                    disabled={savingEdit}
-                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm"
-                  >
-                    <Check className="w-3.5 h-3.5" /> Salva
-                  </button>
-                </div>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Chilometraggio Odometrico</span>
+                <input
+                  type="number"
+                  value={editKm}
+                  onChange={(e) => setEditKm(e.target.value)}
+                  className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-[#1E242B] focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                />
               </div>
             </div>
 
-            {/* Scadenze & Documenti */}
-            <div className="p-4 bg-white border border-gray-200 rounded-2xl space-y-2 text-xs">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Scadenze Mezzo</span>
-              <div className="grid grid-cols-2 gap-4 pt-1">
-                <div>
-                  <span className="text-gray-500 block text-[11px]">Scadenza Assicurazione:</span>
-                  <b className="text-gray-800 text-xs">{selectedVeicolo.scadenza_assicurazione || 'Non registrata'}</b>
+            {/* 📸 SEZIONE FOTO DOCUMENTI VEICOLO (Libretto, Assicurazione, Revisione) */}
+            <div className="p-4 bg-white border border-gray-200 rounded-2xl space-y-3">
+              <span className="text-[11px] font-extrabold text-[#1E242B] uppercase tracking-wider block">
+                Foto Documenti Furgone
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* 1. Libretto */}
+                <div className="p-3 bg-[#F8F9FB] border border-gray-200 rounded-2xl text-center space-y-2">
+                  <span className="text-[10px] font-bold text-gray-600 block">Libretto di Circolazione</span>
+                  {selectedVeicolo.foto_libretto ? (
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => { setDocModalUrl(selectedVeicolo.foto_libretto); setDocModalTitolo(`Libretto - ${selectedVeicolo.targa}`); }}
+                        className="w-full py-1.5 bg-white hover:bg-gray-100 border border-gray-200 text-xs font-bold text-[#1E242B] rounded-xl flex items-center justify-center gap-1"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-[#E05353]" /> Vedi Foto
+                      </button>
+                      <label className="block text-[9px] text-gray-400 hover:text-gray-600 cursor-pointer">
+                        Sostituisci foto
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => e.target.files?.[0] && handleUploadDocMezzo(e.target.files[0], 'foto_libretto')}
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <label className="py-3 border border-dashed border-gray-300 hover:border-[#E05353] rounded-xl flex flex-col items-center justify-center cursor-pointer bg-white transition">
+                      <Camera className="w-4 h-4 text-[#E05353] mb-1" />
+                      <span className="text-[10px] font-bold text-gray-700">Carica Libretto</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => e.target.files?.[0] && handleUploadDocMezzo(e.target.files[0], 'foto_libretto')}
+                      />
+                    </label>
+                  )}
                 </div>
-                <div>
-                  <span className="text-gray-500 block text-[11px]">Scadenza Revisione Periodica:</span>
-                  <b className="text-gray-800 text-xs">{selectedVeicolo.scadenza_revisione || 'Non registrata'}</b>
+
+                {/* 2. Assicurazione */}
+                <div className="p-3 bg-[#F8F9FB] border border-gray-200 rounded-2xl text-center space-y-2">
+                  <span className="text-[10px] font-bold text-gray-600 block">Polizza Assicurativa</span>
+                  {selectedVeicolo.foto_assicurazione ? (
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => { setDocModalUrl(selectedVeicolo.foto_assicurazione); setDocModalTitolo(`Assicurazione - ${selectedVeicolo.targa}`); }}
+                        className="w-full py-1.5 bg-white hover:bg-gray-100 border border-gray-200 text-xs font-bold text-[#1E242B] rounded-xl flex items-center justify-center gap-1"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-blue-600" /> Vedi Foto
+                      </button>
+                      <label className="block text-[9px] text-gray-400 hover:text-gray-600 cursor-pointer">
+                        Sostituisci foto
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => e.target.files?.[0] && handleUploadDocMezzo(e.target.files[0], 'foto_assicurazione')}
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <label className="py-3 border border-dashed border-gray-300 hover:border-blue-500 rounded-xl flex flex-col items-center justify-center cursor-pointer bg-white transition">
+                      <Camera className="w-4 h-4 text-blue-500 mb-1" />
+                      <span className="text-[10px] font-bold text-gray-700">Carica Polizza</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => e.target.files?.[0] && handleUploadDocMezzo(e.target.files[0], 'foto_assicurazione')}
+                      />
+                    </label>
+                  )}
                 </div>
+
+                {/* 3. Revisione */}
+                <div className="p-3 bg-[#F8F9FB] border border-gray-200 rounded-2xl text-center space-y-2">
+                  <span className="text-[10px] font-bold text-gray-600 block">Certificato Revisione</span>
+                  {selectedVeicolo.foto_revisione ? (
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => { setDocModalUrl(selectedVeicolo.foto_revisione); setDocModalTitolo(`Revisione - ${selectedVeicolo.targa}`); }}
+                        className="w-full py-1.5 bg-white hover:bg-gray-100 border border-gray-200 text-xs font-bold text-[#1E242B] rounded-xl flex items-center justify-center gap-1"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-emerald-600" /> Vedi Foto
+                      </button>
+                      <label className="block text-[9px] text-gray-400 hover:text-gray-600 cursor-pointer">
+                        Sostituisci foto
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => e.target.files?.[0] && handleUploadDocMezzo(e.target.files[0], 'foto_revisione')}
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <label className="py-3 border border-dashed border-gray-300 hover:border-emerald-500 rounded-xl flex flex-col items-center justify-center cursor-pointer bg-white transition">
+                      <Camera className="w-4 h-4 text-emerald-500 mb-1" />
+                      <span className="text-[10px] font-bold text-gray-700">Carica Tagliando</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => e.target.files?.[0] && handleUploadDocMezzo(e.target.files[0], 'foto_revisione')}
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {uploadingDoc && (
+                <div className="text-[11px] text-[#E05353] font-bold flex items-center justify-center gap-1 pt-1">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Caricamento documento in corso...
+                </div>
+              )}
+            </div>
+
+            {/* Date di Scadenza Modificabili */}
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Scad. Assicurazione</label>
+                <input
+                  type="date"
+                  value={editAssicurazione}
+                  onChange={(e) => setEditAssicurazione(e.target.value)}
+                  className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Scad. Revisione</label>
+                <input
+                  type="date"
+                  value={editRevisione}
+                  onChange={(e) => setEditRevisione(e.target.value)}
+                  className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                />
               </div>
             </div>
 
-            {/* Note Tecniche / Manutenzioni */}
+            {/* Note Mezzo */}
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Note Mezzo / Tagliandi / Riparazioni</label>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Note / Manutenzioni / Officina</label>
               <textarea
                 rows={2}
-                placeholder="es. Sostituzione pastiglie freni effettuata a 120.000 km..."
+                placeholder="es. Tagliando eseguito, gomme invernali montate a 115.000 km..."
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
                 className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl p-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#E05353]"
               />
-              <div className="text-right">
-                <button
-                  type="button"
-                  onClick={handleSalvaDettagliScheda}
-                  disabled={savingEdit}
-                  className="px-3 py-1.5 bg-[#1E242B] hover:bg-black text-white text-xs font-bold rounded-xl transition"
-                >
-                  Salva Note Mezzo
-                </button>
-              </div>
             </div>
 
-            {/* Storico Ultimi Turni con questo Furgone */}
+            {/* Tasto Salva Modifiche Scheda */}
+            <button
+              type="button"
+              onClick={handleSalvaDettagliScheda}
+              disabled={savingEdit}
+              className="w-full py-3 bg-[#1E242B] hover:bg-black text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm"
+            >
+              {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 text-emerald-400" />}
+              Salva Modifiche Scheda Furgone
+            </button>
+
+            {/* Storico Ultimi Turni */}
             <div className="space-y-2 pt-2 border-t border-gray-100">
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Ultimi Autisti che hanno guidato questo mezzo</span>
               {loadingDettaglio ? (
                 <div className="py-6 text-center text-xs text-gray-400">Caricamento cronologia turni...</div>
               ) : storicoTurniMezzo.length === 0 ? (
                 <div className="py-4 text-center text-xs text-gray-400 bg-[#F8F9FB] rounded-xl">
-                  Nessun turno registrato di recente con questo veicolo.
+                  Nessun turno registrato per questo veicolo.
                 </div>
               ) : (
                 <div className="space-y-1.5 max-h-40 overflow-y-auto">
@@ -518,6 +689,41 @@ export default function FlottaPage() {
               >
                 Chiudi
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODALE INGRANDIMENTO FOTO DOCUMENTO */}
+      {docModalUrl && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+              <h3 className="font-extrabold text-sm text-[#1E242B]">{docModalTitolo}</h3>
+              <div className="flex items-center gap-2">
+                <a
+                  href={docModalUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-bold text-[#E05353] flex items-center gap-1 hover:underline"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Apri originale
+                </a>
+                <button 
+                  onClick={() => setDocModalUrl(null)}
+                  className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-black rounded-2xl overflow-hidden flex items-center justify-center">
+              <img 
+                src={docModalUrl} 
+                alt="Documento Mezzo"
+                className="max-h-[70vh] w-auto object-contain"
+              />
             </div>
           </div>
         </div>
