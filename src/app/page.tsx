@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/supabase';
 import { 
@@ -17,11 +17,15 @@ import {
   Download,
   Receipt,
   Users,
-  Truck
+  Truck,
+  BarChart3,
+  TrendingUp,
+  Euro
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
   const [turni, setTurni] = useState<any[]>([]);
+  const [spese, setSpese] = useState<any[]>([]);
   const [loadingTurni, setLoadingTurni] = useState(true);
 
   // Modifica Admin
@@ -29,25 +33,36 @@ export default function AdminDashboardPage() {
   const [editTarga, setEditTarga] = useState('');
   const [editKmFine, setEditKmFine] = useState('');
 
-  const fetchTurni = async () => {
+  const fetchDati = async () => {
     setLoadingTurni(true);
     try {
-      const { data, error } = await supabase
+      // 1. Turni
+      const { data: tData, error: tErr } = await supabase
         .from('turni_presenze')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setTurni(data || []);
+      if (tErr) throw tErr;
+      setTurni(tData || []);
+
+      // 2. Spese per grafico andamento
+      const { data: sData, error: sErr } = await supabase
+        .from('vehicle_expenses')
+        .select('*')
+        .order('data_spesa', { ascending: true });
+
+      if (!sErr && sData) {
+        setSpese(sData);
+      }
     } catch (err: any) {
-      console.error('Errore recupero turni:', err);
+      console.error('Errore recupero dati:', err);
     } finally {
       setLoadingTurni(false);
     }
   };
 
   useEffect(() => {
-    fetchTurni();
+    fetchDati();
   }, []);
 
   const handleAdminUpdate = async (turno: any) => {
@@ -76,7 +91,7 @@ export default function AdminDashboardPage() {
       if (error) throw error;
 
       setEditingId(null);
-      fetchTurni();
+      fetchDati();
       alert('Turno aggiornato con successo!');
     } catch (err: any) {
       alert(`Errore: ${err.message}`);
@@ -96,7 +111,7 @@ export default function AdminDashboardPage() {
       if (error) throw error;
 
       alert('Turno eliminato dal registro!');
-      fetchTurni();
+      fetchDati();
     } catch (err: any) {
       alert(`Errore cancellazione: ${err.message}`);
     }
@@ -136,6 +151,28 @@ export default function AdminDashboardPage() {
   const turniAperti = turni.filter(t => t.stato === 'aperto').length;
   const turniOggi = turni.length;
   const kmTotaliRegistrati = turni.reduce((acc, t) => acc + (Number(t.km_percorsi) || 0), 0);
+  const totaleSpeseRegistrate = spese.reduce((acc, s) => acc + Number(s.importo || 0), 0);
+
+  // Calcolo dati mensili per il Grafico Andamento
+  const andamentoSpeseMensili = useMemo(() => {
+    const map: { [key: string]: number } = {};
+    spese.forEach((s) => {
+      const mese = s.data_spesa ? s.data_spesa.slice(0, 7) : '2026-09';
+      map[mese] = (map[mese] || 0) + Number(s.importo || 0);
+    });
+
+    const mesi = Object.keys(map).sort();
+    if (mesi.length === 0) {
+      return [{ mese: '2026-09', totale: 0, pct: 10 }];
+    }
+
+    const maxVal = Math.max(...Object.values(map), 1);
+    return mesi.map((m) => ({
+      mese: m,
+      totale: map[m],
+      pct: (map[m] / maxVal) * 100,
+    }));
+  }, [spese]);
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] font-sans antialiased pb-24">
@@ -172,7 +209,7 @@ export default function AdminDashboardPage() {
               <Smartphone className="w-3.5 h-3.5" /> App Autista
             </Link>
             <button 
-              onClick={fetchTurni} 
+              onClick={fetchDati} 
               title="Aggiorna Dati"
               className="w-9 h-9 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
             >
@@ -197,13 +234,13 @@ export default function AdminDashboardPage() {
           <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
             <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Km Rendicontati Totali</div>
             <div className="text-2xl font-black mt-1 text-[#1E242B]">+{kmTotaliRegistrati.toLocaleString('it-IT')} km</div>
-            <div className="text-[11px] font-medium text-gray-500 mt-1">Da turni chiusi</div>
+            <div className="text-[11px] font-medium text-gray-500 mt-1">Da turni completati</div>
           </div>
 
           <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Gestione Spese</div>
-            <div className="text-2xl font-black mt-1 text-emerald-600">Fatture</div>
-            <div className="text-[11px] font-medium text-emerald-600 mt-1">📊 Manutenzioni Flotta</div>
+            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Costi Totali Flotta</div>
+            <div className="text-2xl font-black mt-1 text-emerald-600">€ {totaleSpeseRegistrate.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</div>
+            <div className="text-[11px] font-medium text-emerald-600 mt-1">📊 Manutenzioni & DKV</div>
           </div>
 
           <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
@@ -213,7 +250,50 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* 4 MODULI GESTIONALI (Flotta, Spese, Personale, Cedolini) */}
+        {/* GRAFICO ANDAMENTO COSTI FLOTTA IN HOME */}
+        <section className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-rose-50 text-[#E05353] rounded-xl">
+                <BarChart3 className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-extrabold text-[#1E242B]">Andamento Spese & Manutenzioni Flotta</h2>
+                <p className="text-xs text-gray-400">Distribuzione temporale delle spese, tagliandi e rifornimenti DKV</p>
+              </div>
+            </div>
+
+            <Link
+              href="/spese"
+              className="text-xs font-bold text-[#E05353] hover:underline flex items-center gap-1"
+            >
+              Apri Dettaglio Spese <ArrowUpRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          {spese.length === 0 ? (
+            <div className="py-8 text-center text-xs text-gray-400 bg-[#F8F9FB] rounded-2xl border border-dashed border-gray-200">
+              Nessuna spesa registrata finora. Clicca su "Aggiungi Fattura" o importa una fattura DKV per popolare il grafico.
+            </div>
+          ) : (
+            <div className="pt-4 flex items-end gap-4 h-48 border-b border-gray-100 pb-2">
+              {andamentoSpeseMensili.map((d) => (
+                <div key={d.mese} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
+                  <span className="text-[10px] font-black text-gray-700 opacity-0 group-hover:opacity-100 transition">
+                    € {d.totale.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </span>
+                  <div 
+                    style={{ height: `${Math.max(d.pct, 12)}%` }}
+                    className="w-full max-w-[56px] bg-gradient-to-t from-[#1E242B] to-[#E05353] rounded-t-xl transition-all group-hover:brightness-110 shadow-sm"
+                  />
+                  <span className="text-[11px] font-bold text-gray-500">{d.mese}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* 4 MODULI GESTIONALI */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           
           {/* Modulo 1: Flotta */}
@@ -249,7 +329,7 @@ export default function AdminDashboardPage() {
                 <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Contabilità</span>
                 <h3 className="text-base font-black text-[#1E242B] mt-0.5">Spese & Fatture</h3>
                 <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
-                  Registra tagliandi, gomme, riparazioni e allega ricevute.
+                  Registra tagliandi, gomme, riparazioni e importa fatture DKV.
                 </p>
               </div>
             </div>
@@ -325,7 +405,7 @@ export default function AdminDashboardPage() {
                 <Download className="w-3.5 h-3.5" /> Scarica CSV
               </button>
               <button 
-                onClick={fetchTurni}
+                onClick={fetchDati}
                 className="text-xs font-bold text-[#E05353] hover:underline flex items-center gap-1 ml-2"
               >
                 Aggiorna <ArrowUpRight className="w-3.5 h-3.5" />
