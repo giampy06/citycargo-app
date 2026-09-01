@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/supabase';
 import { 
   ShieldCheck, 
   FileText, 
-  Calendar, 
   RefreshCw,
   Smartphone,
   ArrowUpRight,
@@ -14,7 +14,10 @@ import {
   X,
   Trash2,
   ChevronRight,
-  Download
+  Download,
+  Receipt,
+  Users,
+  Truck
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -99,17 +102,17 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Funzione di Export CSV per Excel
   const exportToExcelCSV = () => {
     if (turni.length === 0) {
       alert('Nessun turno registrato da esportare.');
       return;
     }
 
-    const headers = ['Data', 'Codice Verbale', 'Targa Mezzo', 'Appalto', 'Km Inizio', 'Km Fine', 'Km Percorsi', 'Stato'];
+    const headers = ['Data', 'Codice Verbale', 'Autista', 'Targa Mezzo', 'Appalto', 'Km Inizio', 'Km Fine', 'Km Percorsi', 'Stato'];
     const rows = turni.map(t => [
       new Date(t.created_at).toLocaleDateString('it-IT'),
       t.codice_verbale || '',
+      t.nome_autista || 'Autista',
       t.targa_mezzo || '',
       t.appalto || '',
       t.km_inizio || '',
@@ -160,14 +163,14 @@ export default function AdminDashboardPage() {
               className="h-9 px-3 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center gap-1.5 transition-colors border border-emerald-200"
               title="Esporta foglio turni per contabilità"
             >
-              <Download className="w-3.5 h-3.5 text-emerald-600" /> Export Excel/CSV
+              <Download className="w-3.5 h-3.5 text-emerald-600" /> Export Excel
             </button>
-            <a 
+            <Link 
               href="/autista" 
               className="h-9 px-3.5 rounded-full bg-rose-50 hover:bg-rose-100 text-[#E05353] font-bold text-xs flex items-center gap-1.5 transition-colors border border-rose-100"
             >
               <Smartphone className="w-3.5 h-3.5" /> App Autista
-            </a>
+            </Link>
             <button 
               onClick={fetchTurni} 
               title="Aggiorna Dati"
@@ -198,63 +201,113 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Tagliandi Imminenti</div>
-            <div className="text-2xl font-black mt-1 text-amber-600">2</div>
-            <div className="text-[11px] font-medium text-amber-600 mt-1">⚠️ Da pianificare</div>
+            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Gestione Spese</div>
+            <div className="text-2xl font-black mt-1 text-emerald-600">Fatture</div>
+            <div className="text-[11px] font-medium text-emerald-600 mt-1">📊 Manutenzioni Flotta</div>
           </div>
 
           <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Presenze Registrate</div>
+            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Presenze Totali</div>
             <div className="text-2xl font-black mt-1 text-[#1E242B]">{turniOggi}</div>
-            <div className="text-[11px] font-medium text-emerald-600 mt-1">Turni a Sistema</div>
+            <div className="text-[11px] font-medium text-emerald-600 mt-1">Turni Registrati</div>
           </div>
         </div>
 
-        {/* Moduli Flotta & Cedolini */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-            <div className="space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-800 flex items-center justify-center">
-                <ShieldCheck className="w-6 h-6" />
+        {/* 4 MODULI GESTIONALI (Flotta, Spese, Personale, Cedolini) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          
+          {/* Modulo 1: Flotta */}
+          <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+            <div className="space-y-3">
+              <div className="w-11 h-11 rounded-2xl bg-gray-100 text-gray-800 flex items-center justify-center">
+                <Truck className="w-5 h-5 text-[#E05353]" />
               </div>
               <div>
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Flotta Mezzi</span>
-                <h3 className="text-lg font-black text-[#1E242B] mt-0.5">Veicoli, Scadenze & Tagliandi</h3>
-                <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                  Monitoraggio scadenze assicurative, revisioni ministeriali e registrazione nuovi veicoli.
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Flotta Mezzi</span>
+                <h3 className="text-base font-black text-[#1E242B] mt-0.5">Veicoli & Manutenzioni</h3>
+                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                  Stato mezzi, libretti, scadenze revisione e storico autisti.
                 </p>
               </div>
             </div>
-            <a 
+            <Link 
               href="/flotta" 
-              className="mt-6 w-full py-3.5 px-4 bg-[#1E242B] hover:bg-black text-white rounded-2xl font-bold text-xs tracking-wider uppercase shadow-sm flex items-center justify-center gap-2 transition-all text-center"
+              className="mt-4 w-full py-2.5 px-3 bg-[#1E242B] hover:bg-black text-white rounded-2xl font-bold text-xs tracking-wider uppercase shadow-sm flex items-center justify-center gap-1.5 transition-all text-center"
             >
-              Apri Gestione Flotta
-              <ChevronRight className="w-4 h-4" />
-            </a>
+              Gestione Flotta
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
 
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-            <div className="space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
-                <FileText className="w-6 h-6" />
+          {/* Modulo 2: Spese & Fatture */}
+          <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+            <div className="space-y-3">
+              <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                <Receipt className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Personale & Amministrazione</span>
-                <h3 className="text-lg font-black text-[#1E242B] mt-0.5">Archivio Buste Paga & Ricevute</h3>
-                <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                  Caricamento PDF cedolini per autista e controllo attestazioni telematiche di avvenuta ricezione.
+                <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Contabilità</span>
+                <h3 className="text-base font-black text-[#1E242B] mt-0.5">Spese & Fatture</h3>
+                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                  Registra tagliandi, gomme, riparazioni e allega ricevute.
                 </p>
               </div>
             </div>
-            <a 
-              href="/cedolini" 
-              className="mt-6 w-full py-3.5 px-4 bg-emerald-700 hover:bg-emerald-800 text-white rounded-2xl font-bold text-xs tracking-wider uppercase shadow-sm flex items-center justify-center gap-2 transition-all text-center"
+            <Link 
+              href="/spese" 
+              className="mt-4 w-full py-2.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-2xl font-bold text-xs tracking-wider uppercase shadow-sm flex items-center justify-center gap-1.5 transition-all text-center"
             >
-              Gestisci Buste Paga
-              <ChevronRight className="w-4 h-4" />
-            </a>
+              Aggiungi Fattura
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
+
+          {/* Modulo 3: Personale & Autisti */}
+          <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+            <div className="space-y-3">
+              <div className="w-11 h-11 rounded-2xl bg-rose-50 text-[#E05353] flex items-center justify-center">
+                <Users className="w-5 h-5 text-[#E05353]" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-[#E05353] uppercase tracking-wider">Risorse Umane</span>
+                <h3 className="text-base font-black text-[#1E242B] mt-0.5">Personale & Autisti</h3>
+                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                  Anagrafica completa autisti, controllo patenti e scadenze.
+                </p>
+              </div>
+            </div>
+            <Link 
+              href="/autisti" 
+              className="mt-4 w-full py-2.5 px-3 bg-[#E05353] hover:bg-[#c94545] text-white rounded-2xl font-bold text-xs tracking-wider uppercase shadow-sm flex items-center justify-center gap-1.5 transition-all text-center"
+            >
+              Elenco Autisti
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {/* Modulo 4: Buste Paga */}
+          <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+            <div className="space-y-3">
+              <div className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                <FileText className="w-5 h-5 text-slate-700" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Amministrazione</span>
+                <h3 className="text-base font-black text-[#1E242B] mt-0.5">Buste Paga</h3>
+                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                  Caricamento cedolini e attestazioni digitali di firma.
+                </p>
+              </div>
+            </div>
+            <Link 
+              href="/cedolini" 
+              className="mt-4 w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-2xl font-bold text-xs tracking-wider uppercase shadow-sm flex items-center justify-center gap-1.5 transition-all text-center"
+            >
+              Gestisci Cedolini
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
         </div>
 
         {/* Registro Turni */}
@@ -286,6 +339,7 @@ export default function AdminDashboardPage() {
                 <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase text-[10px] tracking-wider">
                   <th className="pb-3">Data</th>
                   <th className="pb-3">Codice</th>
+                  <th className="pb-3">Autista</th>
                   <th className="pb-3">Targa</th>
                   <th className="pb-3">Appalto</th>
                   <th className="pb-3">Km Inizio / Fine</th>
@@ -297,7 +351,7 @@ export default function AdminDashboardPage() {
               <tbody className="divide-y divide-gray-50 text-gray-700 font-medium">
                 {turni.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-6 text-center text-gray-400">
+                    <td colSpan={9} className="py-6 text-center text-gray-400">
                       Nessun turno registrato al momento.
                     </td>
                   </tr>
@@ -308,6 +362,7 @@ export default function AdminDashboardPage() {
                         {new Date(turno.created_at).toLocaleDateString('it-IT')}
                       </td>
                       <td className="py-3 font-mono text-[11px] font-bold text-gray-500">{turno.codice_verbale}</td>
+                      <td className="py-3 font-bold text-gray-800 capitalize">{turno.nome_autista || 'Autista'}</td>
                       <td className="py-3 font-bold text-[#1E242B]">
                         {editingId === turno.id ? (
                           <input 
