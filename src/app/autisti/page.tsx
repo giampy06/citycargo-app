@@ -22,7 +22,9 @@ import {
   FileBadge,
   MessageSquare,
   KeyRound,
-  Lock
+  Check,
+  UserX,
+  Clock
 } from 'lucide-react';
 
 export default function AutistiPage() {
@@ -55,7 +57,7 @@ export default function AutistiPage() {
       const { data, error } = await supabase
         .from('autisti')
         .select('*')
-        .order('cognome', { ascending: true });
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       setAutisti(data || []);
@@ -81,71 +83,44 @@ export default function AutistiPage() {
     return { label: `Regolare (${diffGiorni} gg)`, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
   };
 
-  const handleCreateAutista = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setModalError(null);
-    setSubmitting(true);
+  // APPROVAZIONE AUTISTA
+  const handleApprovaAutista = async (autista: any, appaltoScelto: string) => {
+    try {
+      const { error } = await supabase
+        .from('autisti')
+        .update({
+          stato: 'attivo',
+          appalto_default: appaltoScelto,
+          data_approvazione: new Date().toISOString(),
+        })
+        .eq('id', autista.id);
+
+      if (error) throw error;
+
+      alert(`Autista ${autista.nome} ${autista.cognome} approvato ed abilitato al servizio!`);
+      fetchAutisti();
+    } catch (err: any) {
+      alert(`Errore approvazione: ${err.message}`);
+    }
+  };
+
+  // RIFIUTO / CANCELLAZIONE RICHIESTA
+  const handleRifiutaAutista = async (id: string, nomeCompleto: string) => {
+    const conferma = window.confirm(`Sei sicuro di voler rifiutare ed eliminare la richiesta di ${nomeCompleto}?`);
+    if (!conferma) return;
 
     try {
-      if (!email || !password || !nome || !cognome) {
-        throw new Error('Nome, cognome, email e password sono obbligatori.');
-      }
+      const { error } = await supabase
+        .from('autisti')
+        .delete()
+        .eq('id', id);
 
-      // 1. Registrazione account in Supabase Auth
-      const { error: authError } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
-        password: password,
-        options: {
-          emailRedirectTo: 'https://citycargo-app.vercel.app/autista/login',
-          data: {
-            nome: nome.trim(),
-            cognome: cognome.trim(),
-            full_name: `${nome.trim()} ${cognome.trim()}`,
-            ruolo: 'autista',
-          },
-        },
-      });
+      if (error) throw error;
 
-      if (authError) throw authError;
-
-      // 2. Inserimento scheda anagrafica autisti
-      const { error: dbError } = await supabase.from('autisti').insert([
-        {
-          nome: nome.trim(),
-          cognome: cognome.trim(),
-          codice_fiscale: codiceFiscale?.trim().toUpperCase() || null,
-          telefono: telefono?.trim() || null,
-          email: email.trim().toLowerCase(),
-          appalto_default: appaltoDefault || 'CITI',
-          numero_patente: numeroPatente?.trim().toUpperCase() || null,
-          scadenza_patente: scadenzaPatente || null,
-          possiede_cqc: possiedeCqc || false,
-          scadenza_cqc: possiedeCqc && scadenzaCqc ? scadenzaCqc : null,
-          stato: 'attivo',
-        },
-      ]);
-
-      if (dbError) throw dbError;
-
-      // Reset form
-      setNome('');
-      setCognome('');
-      setCodiceFiscale('');
-      setTelefono('');
-      setEmail('');
-      setPassword('');
-      setNumeroPatente('');
-      setScadenzaPatente('');
-      setPossiedeCqc(false);
-      setScadenzaCqc('');
-      setIsModalOpen(false);
-
+      alert('Richiesta rifiutata ed eliminata.');
       fetchAutisti();
-      alert(`Autista registrato con successo!\nÈ stata inviata un'email di verifica all'indirizzo: ${email}`);
     } catch (err: any) {
-      setModalError(err.message || 'Errore durante il salvataggio.');
-    } finally {
-      setSubmitting(false);
+      alert(`Errore: ${err.message}`);
     }
   };
 
@@ -163,7 +138,11 @@ export default function AutistiPage() {
     }
   };
 
-  const autistiFiltrati = autisti.filter(a => {
+  // Suddivisione tra autisti in attesa e autisti già approvati
+  const autistiInAttesa = autisti.filter(a => a.stato === 'in_attesa');
+  const autistiApprovati = autisti.filter(a => a.stato !== 'in_attesa');
+
+  const autistiFiltrati = autistiApprovati.filter(a => {
     const matchAppalto = filtroAppalto === 'TUTTI' || a.appalto_default === filtroAppalto;
     const nomeCompleto = `${a.nome} ${a.cognome}`.toLowerCase();
     const matchRicerca = nomeCompleto.includes(ricerca.toLowerCase()) || 
@@ -171,16 +150,6 @@ export default function AutistiPage() {
                          (a.telefono && a.telefono.includes(ricerca));
     return matchAppalto && matchRicerca;
   });
-
-  const patentiInScadenza = useMemo(() => {
-    const oggi = new Date();
-    return autisti.filter(a => {
-      if (!a.scadenza_patente) return false;
-      const scad = new Date(a.scadenza_patente);
-      const diff = Math.ceil((scad.getTime() - oggi.getTime()) / (1000 * 60 * 60 * 24));
-      return diff <= 30;
-    }).length;
-  }, [autisti]);
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] pb-24 antialiased font-sans">
@@ -197,7 +166,7 @@ export default function AutistiPage() {
             </button>
             <div>
               <h1 className="font-extrabold text-base tracking-tight">Anagrafica Personale & Autisti</h1>
-              <p className="text-[11px] text-gray-400 font-medium">Controllo Patenti, CQC e Account Operativi</p>
+              <p className="text-[11px] text-gray-400 font-medium">Controllo Documenti, Approvazioni e Assegnazioni</p>
             </div>
           </div>
 
@@ -208,49 +177,89 @@ export default function AutistiPage() {
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#E05353]' : ''}`} />
             </button>
-            <button 
-              onClick={() => setIsModalOpen(true)}
-              className="h-10 px-4 rounded-2xl bg-[#E05353] hover:bg-[#c94545] text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all"
-            >
-              <Plus className="w-4 h-4" /> Nuovo Autista
-            </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-8 pt-6 space-y-6">
-        {/* KPI Cards Risorse Umane */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Conducenti Totali</div>
-            <div className="text-2xl font-black mt-1 text-[#1E242B]">{autisti.length}</div>
-            <div className="text-[11px] font-medium text-emerald-600 mt-1">👥 In Organico</div>
-          </div>
 
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Patenti in Scadenza</div>
-            <div className={`text-2xl font-black mt-1 ${patentiInScadenza > 0 ? 'text-[#E05353]' : 'text-emerald-600'}`}>
-              {patentiInScadenza}
+        {/* 🟡 BOX RICHIESTE DI REGISTRAZIONE IN ATTESA DI APPROVAZIONE */}
+        {autistiInAttesa.length > 0 && (
+          <section className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300 rounded-3xl p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-black text-amber-950 uppercase tracking-wider">
+                    Richieste di Registrazione in Attesa ({autistiInAttesa.length})
+                  </h2>
+                  <p className="text-[11px] text-amber-800">
+                    Verifica i documenti prima di autorizzare l'accesso ai turni
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="text-[11px] font-medium text-gray-500 mt-1">Entro 30 giorni</div>
-          </div>
 
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Autisti Attivi</div>
-            <div className="text-2xl font-black mt-1 text-emerald-600">
-              {autisti.filter(a => a.stato === 'attivo').length}
-            </div>
-            <div className="text-[11px] font-medium text-emerald-600 mt-1">🟢 Con Credenziali Attive</div>
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {autistiInAttesa.map((richiesta) => (
+                <div key={richiesta.id} className="bg-white rounded-2xl p-4 border border-amber-200 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-extrabold text-sm text-[#1E242B] capitalize">
+                        {richiesta.nome} {richiesta.cognome}
+                      </h3>
+                      <span className="text-[11px] text-gray-500 font-mono">{richiesta.email}</span>
+                    </div>
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-100 text-amber-800">
+                      🟡 In Attesa
+                    </span>
+                  </div>
 
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Ferie / Assenti</div>
-            <div className="text-2xl font-black mt-1 text-amber-600">
-              {autisti.filter(a => a.stato === 'ferie' || a.stato === 'malattia').length}
+                  <div className="text-[11px] bg-[#F8F9FB] p-2.5 rounded-xl space-y-1 text-gray-600">
+                    <p>Telefono: <b>{richiesta.telefono || '—'}</b> | CF: <b>{richiesta.codice_fiscale || '—'}</b></p>
+                    <p>Patente: <b>{richiesta.numero_patente || '—'}</b> (Scadenza: {richiesta.scadenza_patente || '—'})</p>
+                    {richiesta.possiede_cqc && (
+                      <p className="text-emerald-700 font-bold">✓ CQC Merci (Scad: {richiesta.scadenza_cqc})</p>
+                    )}
+                  </div>
+
+                  {/* Tasti Approva / Rifiuta */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => handleApprovaAutista(richiesta, 'CITI')}
+                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition shadow-sm"
+                    >
+                      <Check className="w-3.5 h-3.5" /> Approva (CITI)
+                    </button>
+                    <button
+                      onClick={() => handleApprovaAutista(richiesta, 'EDF')}
+                      className="py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs transition"
+                      title="Approva per EDF"
+                    >
+                      EDF
+                    </button>
+                    <button
+                      onClick={() => handleApprovaAutista(richiesta, 'RHENUS')}
+                      className="py-2 px-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs transition"
+                      title="Approva per RHENUS"
+                    >
+                      RHENUS
+                    </button>
+                    <button
+                      onClick={() => handleRifiutaAutista(richiesta.id, `${richiesta.nome} ${richiesta.cognome}`)}
+                      className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition"
+                      title="Rifiuta ed elimina richiesta"
+                    >
+                      <UserX className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="text-[11px] font-medium text-amber-600 mt-1">🟡 Non disponibili</div>
-          </div>
-        </div>
+          </section>
+        )}
 
         {/* Ricerca e Filtri */}
         <div className="bg-white rounded-3xl p-4 border border-gray-100 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
@@ -258,7 +267,7 @@ export default function AutistiPage() {
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input 
               type="text"
-              placeholder="Cerca autista per nome, CF o telefono..."
+              placeholder="Cerca tra gli autisti attivi..."
               value={ricerca}
               onChange={(e) => setRicerca(e.target.value)}
               className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl pl-10 pr-4 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
@@ -282,7 +291,7 @@ export default function AutistiPage() {
           </div>
         </div>
 
-        {/* Griglia Autisti */}
+        {/* Griglia Autisti Approvati */}
         {loading ? (
           <div className="py-20 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-[#E05353]" />
@@ -290,7 +299,7 @@ export default function AutistiPage() {
           </div>
         ) : autistiFiltrati.length === 0 ? (
           <div className="py-16 text-center text-xs text-gray-400 bg-white rounded-3xl border border-gray-100">
-            Nessun autista trovato. Clicca su "+ Nuovo Autista" per inserire il primo conducente.
+            Nessun autista attivo in archivio.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -306,7 +315,7 @@ export default function AutistiPage() {
                   <div>
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-lg bg-rose-50 text-[#E05353]">
-                        {autista.appalto_default}
+                        {autista.appalto_default || 'CITI'}
                       </span>
                       
                       <select
@@ -340,17 +349,17 @@ export default function AutistiPage() {
                     <div className="mt-4 space-y-2 text-xs bg-[#F8F9FB] p-3 rounded-2xl">
                       <div className="flex items-center justify-between">
                         <span className="text-gray-500 flex items-center gap-1.5 font-medium">
-                          <ShieldCheck className="w-3.5 h-3.5 text-gray-400" /> Scad. Patente:
+                          <ShieldCheck className="w-3.5 h-3.5 text-gray-400" /> Patente:
                         </span>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${patenteStatus.color}`}>
-                          {patenteStatus.label}
+                          {autista.numero_patente ? `${autista.numero_patente} (${patenteStatus.label})` : patenteStatus.label}
                         </span>
                       </div>
 
                       {autista.possiede_cqc && (
                         <div className="flex items-center justify-between">
                           <span className="text-gray-500 flex items-center gap-1.5 font-medium">
-                            <FileBadge className="w-3.5 h-3.5 text-gray-400" /> Scadenza CQC:
+                            <FileBadge className="w-3.5 h-3.5 text-gray-400" /> CQC:
                           </span>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${cqcStatus?.color}`}>
                             {cqcStatus?.label}
@@ -390,179 +399,6 @@ export default function AutistiPage() {
           </div>
         )}
       </main>
-
-      {/* MODALE INSERIMENTO NUOVO AUTISTA */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div>
-                <h3 className="font-extrabold text-base text-[#1E242B]">Crea Account Autista</h3>
-                <p className="text-[11px] text-gray-400">Genera credenziali e invia link di verifica</p>
-              </div>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {modalError && (
-              <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-[#E05353] text-xs font-bold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{modalError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleCreateAutista} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-gray-600 block mb-1">Nome</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Mario"
-                    value={nome}
-                    onChange={(e) => setNome(e.target.value)}
-                    className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-gray-600 block mb-1">Cognome</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Rossi"
-                    value={cognome}
-                    onChange={(e) => setCognome(e.target.value)}
-                    className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                  />
-                </div>
-              </div>
-
-              {/* CREDENZIALI DI ACCESSO */}
-              <div className="p-3 bg-rose-50/60 border border-rose-100 rounded-2xl space-y-2.5">
-                <span className="text-[11px] font-extrabold text-[#E05353] uppercase tracking-wider block">
-                  Credenziali di Accesso App Autista
-                </span>
-                <div>
-                  <label className="text-[10px] font-bold text-gray-600 block mb-1">Email di Login</label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="mario.rossi@citycargo.it"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-gray-600 block mb-1">Password Iniziale</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Password123!"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-gray-600 block mb-1">Telefono / WhatsApp</label>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="+39 340 1234567"
-                    value={telefono}
-                    onChange={(e) => setTelefono(e.target.value)}
-                    className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-gray-600 block mb-1">Appalto Assegnato</label>
-                  <select
-                    value={appaltoDefault}
-                    onChange={(e: any) => setAppaltoDefault(e.target.value)}
-                    className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                  >
-                    <option value="CITI">CITI</option>
-                    <option value="EDF">EDF</option>
-                    <option value="RHENUS">RHENUS</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 pt-1 border-t border-gray-100">
-                <div>
-                  <label className="text-[11px] font-bold text-gray-600 block mb-1">Codice Fiscale</label>
-                  <input
-                    type="text"
-                    placeholder="RSSMRA80A01H501U"
-                    value={codiceFiscale}
-                    onChange={(e) => setCodiceFiscale(e.target.value.toUpperCase())}
-                    className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold uppercase focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-gray-600 block mb-1">Scadenza Patente</label>
-                  <input
-                    type="date"
-                    required
-                    value={scadenzaPatente}
-                    onChange={(e) => setScadenzaPatente(e.target.value)}
-                    className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <label className="flex items-center gap-2 cursor-pointer mb-2">
-                  <input
-                    type="checkbox"
-                    checked={possiedeCqc}
-                    onChange={(e) => setPossiedeCqc(e.target.checked)}
-                    className="rounded text-[#E05353] focus:ring-[#E05353]"
-                  />
-                  <span className="text-xs font-bold text-gray-700">Possiede CQC Merci</span>
-                </label>
-
-                {possiedeCqc && (
-                  <div>
-                    <label className="text-[11px] font-bold text-gray-600 block mb-1">Scadenza CQC</label>
-                    <input
-                      type="date"
-                      value={scadenzaCqc}
-                      onChange={(e) => setScadenzaCqc(e.target.value)}
-                      className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="pt-3">
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full py-3 bg-[#E05353] hover:bg-[#c94545] disabled:bg-gray-300 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm flex items-center justify-center gap-2 transition-all"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Registrazione in corso...
-                    </>
-                  ) : (
-                    'Crea Account & Invia Verifica'
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
