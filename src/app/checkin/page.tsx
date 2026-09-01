@@ -4,13 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/supabase';
 import { 
-  Truck, 
   ChevronLeft, 
-  Camera, 
-  PenTool, 
   RotateCcw, 
-  CheckCircle2, 
-  AlertCircle, 
   Loader2,
   ShieldAlert
 } from 'lucide-react';
@@ -18,6 +13,7 @@ import {
 export default function CheckinPage() {
   const router = useRouter();
 
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [appalto, setAppalto] = useState<'CITI' | 'EDF' | 'RHENUS'>('CITI');
   const [targa, setTarga] = useState('');
   const [kmInizio, setKmInizio] = useState('');
@@ -31,10 +27,29 @@ export default function CheckinPage() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
 
-  // Verifica se esiste già un turno creato oggi
+  // Blocco Tasto Indietro del Telefono/Browser
+  useEffect(() => {
+    window.history.pushState(null, '', window.location.pathname);
+    const handlePopState = () => {
+      router.replace('/autista');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [router]);
+
   useEffect(() => {
     async function checkTodayShift() {
       setCheckingToday(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.replace('/autista/login');
+        return;
+      }
+      setCurrentUser(session.user);
+
       const oggiInizio = new Date();
       oggiInizio.setHours(0, 0, 0, 0);
 
@@ -42,6 +57,7 @@ export default function CheckinPage() {
         const { data, error } = await supabase
           .from('turni_presenze')
           .select('id, created_at, stato')
+          .eq('stato', 'aperto')
           .gte('created_at', oggiInizio.toISOString())
           .limit(1);
 
@@ -57,9 +73,8 @@ export default function CheckinPage() {
     }
 
     checkTodayShift();
-  }, []);
+  }, [router]);
 
-  // Gestione Canvas Firma
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -111,7 +126,7 @@ export default function CheckinPage() {
     e.preventDefault();
 
     if (giaRegistratoOggi) {
-      alert('Hai già effettuato un Check-in per la giornata di oggi. È consentito un solo turno al giorno.');
+      alert('Hai già effettuato un Check-in per la giornata di oggi.');
       return;
     }
 
@@ -129,7 +144,7 @@ export default function CheckinPage() {
 
     try {
       const canvas = canvasRef.current;
-      const signatureDataUrl = canvas ? canvas.toDataURL('image/png') : null;
+      const signatureDataUrl = canvas && hasSignature ? canvas.toDataURL('image/png') : null;
       const codiceVerbale = `CHK-${Date.now().toString().slice(-8)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
       const { error } = await supabase
@@ -142,6 +157,8 @@ export default function CheckinPage() {
             km_inizio: Number(kmInizio),
             note_inizio: noteIniziali || null,
             firma_autista_url: signatureDataUrl,
+            nome_autista: currentUser?.user_metadata?.full_name || currentUser?.email || 'Autista',
+            driver_id: currentUser?.id || null,
             stato: 'aperto',
           },
         ]);
@@ -149,7 +166,7 @@ export default function CheckinPage() {
       if (error) throw error;
 
       alert(`Check-in registrato con successo!\nCodice Verbale: ${codiceVerbale}`);
-      router.push('/autista');
+      router.replace('/autista');
     } catch (err: any) {
       console.error('Errore salvataggio check-in:', err);
       alert(`Errore: ${err.message}`);
@@ -164,7 +181,7 @@ export default function CheckinPage() {
         <div className="max-w-xl mx-auto flex items-center justify-between">
           <button 
             type="button"
-            onClick={() => router.push('/autista')}
+            onClick={() => router.replace('/autista')}
             className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
@@ -190,10 +207,10 @@ export default function CheckinPage() {
             </div>
             <h2 className="font-extrabold text-base text-amber-900">Check-in Già Effettuato Oggi</h2>
             <p className="text-xs text-amber-700 leading-relaxed max-w-sm mx-auto">
-              È consentito registrare un solo turno al giorno per autista. Se hai commesso un errore o devi modificare il mezzo o i km, puoi farlo direttamente dalla tua schermata iniziale.
+              Hai già un turno aperto per la giornata odierna.
             </p>
             <button
-              onClick={() => router.push('/autista')}
+              onClick={() => router.replace('/autista')}
               className="mt-2 py-3 px-6 bg-amber-700 hover:bg-amber-800 text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition-all"
             >
               Torna alla Home Autista
@@ -201,7 +218,6 @@ export default function CheckinPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* 1. Appalto */}
             <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
                 1. Committente di Oggi
@@ -226,7 +242,6 @@ export default function CheckinPage() {
               </div>
             </div>
 
-            {/* 2. Mezzo e KM */}
             <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
                 2. Dati Mezzo & Chilometri
@@ -256,7 +271,6 @@ export default function CheckinPage() {
               </div>
             </div>
 
-            {/* 3. Firma Digitale */}
             <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400">

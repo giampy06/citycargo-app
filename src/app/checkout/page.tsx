@@ -4,20 +4,17 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/supabase';
 import { 
-  CheckCircle2, 
   ChevronLeft, 
   AlertCircle, 
   Loader2, 
   Clock, 
   Gauge, 
-  Check,
-  Truck
+  Check
 } from 'lucide-react';
 
 export default function CheckoutPage() {
   const router = useRouter();
 
-  // Dati del turno aperto recuperati da Supabase
   const [turnoAperto, setTurnoAperto] = useState<any | null>(null);
   const [loadingTurno, setLoadingTurno] = useState(true);
 
@@ -30,10 +27,28 @@ export default function CheckoutPage() {
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Recupera l'ultimo turno aperto
+  // Blocco Tasto Indietro del Telefono/Browser: rimanda sempre ad /autista
+  useEffect(() => {
+    window.history.pushState(null, '', window.location.pathname);
+    const handlePopState = () => {
+      router.replace('/autista');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [router]);
+
   useEffect(() => {
     async function fetchLastOpenShift() {
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          router.replace('/autista/login');
+          return;
+        }
+
         const { data, error } = await supabase
           .from('turni_presenze')
           .select('*')
@@ -52,7 +67,7 @@ export default function CheckoutPage() {
     }
 
     fetchLastOpenShift();
-  }, []);
+  }, [router]);
 
   const kmIniziali = turnoAperto ? Number(turnoAperto.km_inizio) : 0;
   const kmPercorsi = kmFine && !isNaN(Number(kmFine)) && Number(kmFine) >= kmIniziali ? Number(kmFine) - kmIniziali : 0;
@@ -93,7 +108,7 @@ export default function CheckoutPage() {
       }
 
       alert(`Turno chiuso con successo!\nKm totali percorsi oggi: +${kmPercorsi} km`);
-      router.push('/');
+      router.replace('/autista');
     } catch (err: any) {
       console.error('Errore chiusura turno:', err);
       setErrorMsg(err.message || 'Errore durante la chiusura del turno.');
@@ -104,12 +119,11 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] pb-16 antialiased">
-      {/* Header Sticky */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-30 px-4 py-3">
         <div className="max-w-xl mx-auto flex items-center justify-between">
           <button 
             type="button"
-            onClick={() => router.push('/')}
+            onClick={() => router.replace('/autista')}
             className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
@@ -130,7 +144,6 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {/* Stato Turno in Corso */}
         {loadingTurno ? (
           <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm mb-4 flex items-center justify-center gap-2 text-xs text-gray-400">
             <Loader2 className="w-4 h-4 animate-spin text-[#E05353]" />
@@ -168,7 +181,6 @@ export default function CheckoutPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* 1. Km Finali */}
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
               1. Chilometri a Fine Servizio
@@ -196,7 +208,6 @@ export default function CheckoutPage() {
             )}
           </div>
 
-          {/* 2. Tipologia Giornata */}
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
               2. Tipologia di Turno
@@ -230,7 +241,6 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* 3. Straordinari & Note */}
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
@@ -273,7 +283,6 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Pulsante Chiusura */}
           <button
             type="submit"
             disabled={loadingSubmit || !turnoAperto}
