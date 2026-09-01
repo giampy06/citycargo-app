@@ -7,24 +7,20 @@ import { supabase } from '@/supabase';
 import { 
   Users, 
   ChevronLeft, 
-  Plus, 
   Search, 
   RefreshCw, 
   X, 
   Loader2, 
-  AlertCircle, 
   Phone, 
-  Mail, 
-  Calendar, 
   ShieldCheck, 
-  UserCheck, 
-  AlertTriangle,
-  FileBadge,
-  MessageSquare,
-  KeyRound,
-  Check,
-  UserX,
-  Clock
+  FileBadge, 
+  MessageSquare, 
+  Check, 
+  UserX, 
+  Clock,
+  ExternalLink,
+  Eye,
+  FileText
 } from 'lucide-react';
 
 export default function AutistiPage() {
@@ -34,22 +30,9 @@ export default function AutistiPage() {
   const [filtroAppalto, setFiltroAppalto] = useState<string>('TUTTI');
   const [ricerca, setRicerca] = useState('');
 
-  // Modale Nuovo Autista
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [modalError, setModalError] = useState<string | null>(null);
-
-  const [nome, setNome] = useState('');
-  const [cognome, setCognome] = useState('');
-  const [codiceFiscale, setCodiceFiscale] = useState('');
-  const [telefono, setTelefono] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [appaltoDefault, setAppaltoDefault] = useState<'CITI' | 'EDF' | 'RHENUS'>('CITI');
-  const [numeroPatente, setNumeroPatente] = useState('');
-  const [scadenzaPatente, setScadenzaPatente] = useState('');
-  const [possiedeCqc, setPossiedeCqc] = useState(false);
-  const [scadenzaCqc, setScadenzaCqc] = useState('');
+  // Modale visualizzazione foto documento
+  const [docModalUrl, setDocModalUrl] = useState<string | null>(null);
+  const [docModalTitolo, setDocModalTitolo] = useState<string>('');
 
   const fetchAutisti = async () => {
     setLoading(true);
@@ -83,7 +66,6 @@ export default function AutistiPage() {
     return { label: `Regolare (${diffGiorni} gg)`, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
   };
 
-  // APPROVAZIONE AUTISTA
   const handleApprovaAutista = async (autista: any, appaltoScelto: string) => {
     try {
       const { error } = await supabase
@@ -97,14 +79,13 @@ export default function AutistiPage() {
 
       if (error) throw error;
 
-      alert(`Autista ${autista.nome} ${autista.cognome} approvato ed abilitato al servizio!`);
+      alert(`Autista ${autista.nome} ${autista.cognome} convalidato ed abilitato al servizio!`);
       fetchAutisti();
     } catch (err: any) {
       alert(`Errore approvazione: ${err.message}`);
     }
   };
 
-  // RIFIUTO / CANCELLAZIONE RICHIESTA
   const handleRifiutaAutista = async (id: string, nomeCompleto: string) => {
     const conferma = window.confirm(`Sei sicuro di voler rifiutare ed eliminare la richiesta di ${nomeCompleto}?`);
     if (!conferma) return;
@@ -117,7 +98,7 @@ export default function AutistiPage() {
 
       if (error) throw error;
 
-      alert('Richiesta rifiutata ed eliminata.');
+      alert('Richiesta eliminata.');
       fetchAutisti();
     } catch (err: any) {
       alert(`Errore: ${err.message}`);
@@ -138,7 +119,6 @@ export default function AutistiPage() {
     }
   };
 
-  // Suddivisione tra autisti in attesa e autisti già approvati
   const autistiInAttesa = autisti.filter(a => a.stato === 'in_attesa');
   const autistiApprovati = autisti.filter(a => a.stato !== 'in_attesa');
 
@@ -165,8 +145,8 @@ export default function AutistiPage() {
               <ChevronLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="font-extrabold text-base tracking-tight">Anagrafica Personale & Autisti</h1>
-              <p className="text-[11px] text-gray-400 font-medium">Controllo Documenti, Approvazioni e Assegnazioni</p>
+              <h1 className="font-extrabold text-base tracking-tight">Anagrafica Personale & Documenti Autisti</h1>
+              <p className="text-[11px] text-gray-400 font-medium">Controllo Foto Patenti, CQC e Approvazioni</p>
             </div>
           </div>
 
@@ -183,7 +163,7 @@ export default function AutistiPage() {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-8 pt-6 space-y-6">
 
-        {/* 🟡 BOX RICHIESTE DI REGISTRAZIONE IN ATTESA DI APPROVAZIONE */}
+        {/* 🟡 RICHIESTE IN ATTESA CON FOTO DOCUMENTI ALLEGATE */}
         {autistiInAttesa.length > 0 && (
           <section className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300 rounded-3xl p-5 sm:p-6 space-y-4">
             <div className="flex items-center justify-between">
@@ -193,10 +173,10 @@ export default function AutistiPage() {
                 </div>
                 <div>
                   <h2 className="text-sm font-black text-amber-950 uppercase tracking-wider">
-                    Richieste di Registrazione in Attesa ({autistiInAttesa.length})
+                    Richieste di Registrazione con Foto Documenti ({autistiInAttesa.length})
                   </h2>
                   <p className="text-[11px] text-amber-800">
-                    Verifica i documenti prima di autorizzare l'accesso ai turni
+                    Clicca sulle foto allegate per verificare la validità dei documenti prima di approvare
                   </p>
                 </div>
               </div>
@@ -219,14 +199,57 @@ export default function AutistiPage() {
 
                   <div className="text-[11px] bg-[#F8F9FB] p-2.5 rounded-xl space-y-1 text-gray-600">
                     <p>Telefono: <b>{richiesta.telefono || '—'}</b> | CF: <b>{richiesta.codice_fiscale || '—'}</b></p>
-                    <p>Patente: <b>{richiesta.numero_patente || '—'}</b> (Scadenza: {richiesta.scadenza_patente || '—'})</p>
+                    <p>N° Patente: <b>{richiesta.numero_patente || '—'}</b> (Scadenza: {richiesta.scadenza_patente || '—'})</p>
                     {richiesta.possiede_cqc && (
-                      <p className="text-emerald-700 font-bold">✓ CQC Merci (Scad: {richiesta.scadenza_cqc})</p>
+                      <p className="text-emerald-700 font-bold">✓ CQC Merci (Scad: {richiesta.scadenza_cqc || '—'})</p>
                     )}
                   </div>
 
-                  {/* Tasti Approva / Rifiuta */}
-                  <div className="flex items-center gap-2 pt-1">
+                  {/* Pulsanti Visualizzazione Foto Documenti */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Foto Documenti Caricate:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {richiesta.foto_patente_fronte && (
+                        <button
+                          type="button"
+                          onClick={() => { setDocModalUrl(richiesta.foto_patente_fronte); setDocModalTitolo(`Patente Fronte - ${richiesta.nome} ${richiesta.cognome}`); }}
+                          className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-bold text-gray-700 flex items-center gap-1 transition"
+                        >
+                          <Eye className="w-3 h-3 text-[#E05353]" /> Patente Fronte
+                        </button>
+                      )}
+                      {richiesta.foto_patente_retro && (
+                        <button
+                          type="button"
+                          onClick={() => { setDocModalUrl(richiesta.foto_patente_retro); setDocModalTitolo(`Patente Retro - ${richiesta.nome} ${richiesta.cognome}`); }}
+                          className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-bold text-gray-700 flex items-center gap-1 transition"
+                        >
+                          <Eye className="w-3 h-3 text-[#E05353]" /> Patente Retro
+                        </button>
+                      )}
+                      {richiesta.foto_codice_fiscale && (
+                        <button
+                          type="button"
+                          onClick={() => { setDocModalUrl(richiesta.foto_codice_fiscale); setDocModalTitolo(`Codice Fiscale - ${richiesta.nome} ${richiesta.cognome}`); }}
+                          className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-bold text-gray-700 flex items-center gap-1 transition"
+                        >
+                          <Eye className="w-3 h-3 text-blue-600" /> Codice Fiscale
+                        </button>
+                      )}
+                      {richiesta.foto_cqc && (
+                        <button
+                          type="button"
+                          onClick={() => { setDocModalUrl(richiesta.foto_cqc); setDocModalTitolo(`CQC - ${richiesta.nome} ${richiesta.cognome}`); }}
+                          className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-bold text-gray-700 flex items-center gap-1 transition"
+                        >
+                          <Eye className="w-3 h-3 text-emerald-600" /> CQC
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Tasti Decisione Admin */}
+                  <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
                     <button
                       onClick={() => handleApprovaAutista(richiesta, 'CITI')}
                       className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition shadow-sm"
@@ -250,7 +273,7 @@ export default function AutistiPage() {
                     <button
                       onClick={() => handleRifiutaAutista(richiesta.id, `${richiesta.nome} ${richiesta.cognome}`)}
                       className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition"
-                      title="Rifiuta ed elimina richiesta"
+                      title="Rifiuta ed elimina"
                     >
                       <UserX className="w-4 h-4" />
                     </button>
@@ -267,7 +290,7 @@ export default function AutistiPage() {
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input 
               type="text"
-              placeholder="Cerca tra gli autisti attivi..."
+              placeholder="Cerca tra gli autisti convalidati..."
               value={ricerca}
               onChange={(e) => setRicerca(e.target.value)}
               className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl pl-10 pr-4 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
@@ -352,23 +375,44 @@ export default function AutistiPage() {
                           <ShieldCheck className="w-3.5 h-3.5 text-gray-400" /> Patente:
                         </span>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${patenteStatus.color}`}>
-                          {autista.numero_patente ? `${autista.numero_patente} (${patenteStatus.label})` : patenteStatus.label}
+                          {patenteStatus.label}
                         </span>
                       </div>
 
-                      {autista.possiede_cqc && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-500 flex items-center gap-1.5 font-medium">
-                            <FileBadge className="w-3.5 h-3.5 text-gray-400" /> CQC:
-                          </span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${cqcStatus?.color}`}>
-                            {cqcStatus?.label}
-                          </span>
-                        </div>
-                      )}
+                      {/* Visione rapida foto documenti salvati */}
+                      <div className="pt-2 border-t border-gray-200/60 flex items-center gap-1">
+                        {autista.foto_patente_fronte && (
+                          <button
+                            type="button"
+                            onClick={() => { setDocModalUrl(autista.foto_patente_fronte); setDocModalTitolo(`Patente Fronte - ${autista.nome}`); }}
+                            className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[9px] font-bold text-gray-600 hover:text-[#E05353]"
+                          >
+                            Fronte
+                          </button>
+                        )}
+                        {autista.foto_patente_retro && (
+                          <button
+                            type="button"
+                            onClick={() => { setDocModalUrl(autista.foto_patente_retro); setDocModalTitolo(`Patente Retro - ${autista.nome}`); }}
+                            className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[9px] font-bold text-gray-600 hover:text-[#E05353]"
+                          >
+                            Retro
+                          </button>
+                        )}
+                        {autista.foto_codice_fiscale && (
+                          <button
+                            type="button"
+                            onClick={() => { setDocModalUrl(autista.foto_codice_fiscale); setDocModalTitolo(`Codice Fiscale - ${autista.nome}`); }}
+                            className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[9px] font-bold text-gray-600 hover:text-blue-600"
+                          >
+                            CF
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
 
+                  {/* Contatti WhatsApp / Telefono */}
                   <div className="pt-3 border-t border-gray-100 flex items-center gap-2">
                     {autista.telefono ? (
                       <>
@@ -399,6 +443,41 @@ export default function AutistiPage() {
           </div>
         )}
       </main>
+
+      {/* MODALE INGRANDIMENTO FOTO DOCUMENTO */}
+      {docModalUrl && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+              <h3 className="font-extrabold text-sm text-[#1E242B]">{docModalTitolo}</h3>
+              <div className="flex items-center gap-2">
+                <a
+                  href={docModalUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-bold text-[#E05353] flex items-center gap-1 hover:underline"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Apri originale
+                </a>
+                <button 
+                  onClick={() => setDocModalUrl(null)}
+                  className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-black rounded-2xl overflow-hidden flex items-center justify-center">
+              <img 
+                src={docModalUrl} 
+                alt="Documento Conducente"
+                className="max-h-[70vh] w-auto object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
