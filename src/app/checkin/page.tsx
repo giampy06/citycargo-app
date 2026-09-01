@@ -1,323 +1,351 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/supabase';
+import { applicaWatermarkLegale } from '@/lib/watermark';
 import { 
   ChevronLeft, 
-  RotateCcw, 
-  Loader2,
-  ShieldAlert
+  Camera, 
+  UploadCloud, 
+  Loader2, 
+  CheckCircle2, 
+  AlertCircle, 
+  Truck, 
+  Gauge, 
+  FileCheck 
 } from 'lucide-react';
 
 export default function CheckinPage() {
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [veicoli, setVeicoli] = useState<any[]>([]);
+  const [loadingInit, setLoadingInit] = useState(true);
 
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [appalto, setAppalto] = useState<'CITI' | 'EDF' | 'RHENUS'>('CITI');
+  // Form State
   const [targa, setTarga] = useState('');
+  const [appalto, setAppalto] = useState<'CITI' | 'EDF' | 'RHENUS'>('CITI');
   const [kmInizio, setKmInizio] = useState('');
-  const [noteIniziali, setNoteIniziali] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [giaRegistratoOggi, setGiaRegistratoOggi] = useState(false);
-  const [checkingToday, setCheckingToday] = useState(true);
+  const [noteInizio, setNoteInizio] = useState('');
+  const [gpsPos, setGpsPos] = useState<string>('');
 
-  // Canvas Firma
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [hasSignature, setHasSignature] = useState(false);
-
-  // Blocco Tasto Indietro del Telefono/Browser
-  useEffect(() => {
-    window.history.pushState(null, '', window.location.pathname);
-    const handlePopState = () => {
-      router.replace('/autista');
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, [router]);
+  // Foto controlli
+  const [fotoQuadro, setFotoQuadro] = useState<File | null>(null);
+  const [fotoDanni, setFotoDanni] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    async function checkTodayShift() {
-      setCheckingToday(true);
+    async function init() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         router.replace('/autista/login');
         return;
       }
-      setCurrentUser(session.user);
+      setUser(session.user);
 
-      const oggiInizio = new Date();
-      oggiInizio.setHours(0, 0, 0, 0);
-
-      try {
-        const { data, error } = await supabase
-          .from('turni_presenze')
-          .select('id, created_at, stato')
-          .eq('stato', 'aperto')
-          .gte('created_at', oggiInizio.toISOString())
-          .limit(1);
-
-        if (error) throw error;
-        if (data && data.length > 0) {
-          setGiaRegistratoOggi(true);
-        }
-      } catch (err) {
-        console.error('Errore verifica turno odierno:', err);
-      } finally {
-        setCheckingToday(false);
+      // Carica veicoli per selezione rapida
+      const { data: vData } = await supabase.from('veicoli').select('targa, modello').order('targa');
+      if (vData && vData.length > 0) {
+        setVeicoli(vData);
+        setTarga(vData[0].targa);
       }
+
+      // Rilevamento coordinate GPS
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => setGpsPos(`${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`),
+          () => setGpsPos('')
+        );
+      }
+      setLoadingInit(false);
     }
-
-    checkTodayShift();
+    init();
   }, [router]);
-
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    setIsDrawing(true);
-    setHasSignature(true);
-    const rect = canvas.getBoundingClientRect();
-    const x = ('touches' in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = ('touches' in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
-
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-  };
-
-  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = ('touches' in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = ('touches' in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
-
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#1E242B';
-    ctx.lineTo(x, y);
-    ctx.stroke();
-  };
-
-  const stopDrawing = () => {
-    setIsDrawing(false);
-  };
-
-  const clearSignature = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setHasSignature(false);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
 
-    if (giaRegistratoOggi) {
-      alert('Hai già effettuato un Check-in per la giornata di oggi.');
+    if (!kmInizio || isNaN(Number(kmInizio))) {
+      setErrorMsg('Inserisci un chilometraggio valido.');
       return;
     }
 
-    if (!targa.trim()) {
-      alert('Inserisci la targa o matricola del mezzo.');
-      return;
-    }
-
-    if (!kmInizio || Number(kmInizio) <= 0) {
-      alert('Inserisci un chilometraggio iniziale valido.');
-      return;
-    }
-
-    setLoading(true);
+    setSubmitting(true);
+    const autistaNome = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Autista';
+    const codiceVerbale = `CHK-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
     try {
-      const canvas = canvasRef.current;
-      const signatureDataUrl = canvas && hasSignature ? canvas.toDataURL('image/png') : null;
-      const codiceVerbale = `CHK-${Date.now().toString().slice(-8)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-
-      const { error } = await supabase
+      // 1. Creazione turno
+      const { data: turno, error: turnoErr } = await supabase
         .from('turni_presenze')
         .insert([
           {
-            codice_verbale: codiceVerbale,
-            appalto,
+            autista_id: user?.id,
+            nome_autista: autistaNome,
             targa_mezzo: targa.trim().toUpperCase(),
+            appalto,
             km_inizio: Number(kmInizio),
-            note_inizio: noteIniziali || null,
-            firma_autista_url: signatureDataUrl,
-            nome_autista: currentUser?.user_metadata?.full_name || currentUser?.email || 'Autista',
-            driver_id: currentUser?.id || null,
+            codice_verbale: codiceVerbale,
             stato: 'aperto',
+            note_inizio: noteInizio || null,
           },
-        ]);
+        ])
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (turnoErr) throw turnoErr;
 
-      alert(`Check-in registrato con successo!\nCodice Verbale: ${codiceVerbale}`);
-      router.replace('/autista');
+      // 2. Upload Foto Quadro con Filigrana Digitale
+      if (fotoQuadro && turno) {
+        const stampedBlob = await applicaWatermarkLegale(fotoQuadro, {
+          targa: targa.toUpperCase(),
+          autista: autistaNome,
+          tipoControllo: 'Check-in Quadro Km',
+          codiceVerbale,
+          gps: gpsPos,
+        });
+
+        const filePath = `turni/${turno.id}/quadro_inizio_${Date.now()}.jpg`;
+        const { error: upErr } = await supabase.storage.from('vehicle-inspections').upload(filePath, stampedBlob, { contentType: 'image/jpeg' });
+        
+        if (!upErr) {
+          const { data: pUrl } = supabase.storage.from('vehicle-inspections').getPublicUrl(filePath);
+          await supabase.from('verbali_foto').insert([
+            {
+              turno_id: turno.id,
+              tipo_controllo: 'checkin',
+              tipo_foto: 'quadro_km',
+              foto_url: pUrl.publicUrl,
+              targa: targa.toUpperCase(),
+              autista_nome: autistaNome,
+              coordinate_gps: gpsPos || null,
+            },
+          ]);
+        }
+      }
+
+      // 3. Upload Foto Danni/Carrozzeria (opzionale)
+      if (fotoDanni && turno) {
+        const stampedDanniBlob = await applicaWatermarkLegale(fotoDanni, {
+          targa: targa.toUpperCase(),
+          autista: autistaNome,
+          tipoControllo: 'Check-in Stato Carrozzeria',
+          codiceVerbale,
+          gps: gpsPos,
+        });
+
+        const filePathDanni = `turni/${turno.id}/carrozzeria_inizio_${Date.now()}.jpg`;
+        const { error: upDanniErr } = await supabase.storage.from('vehicle-inspections').upload(filePathDanni, stampedDanniBlob, { contentType: 'image/jpeg' });
+
+        if (!upDanniErr) {
+          const { data: pUrlDanni } = supabase.storage.from('vehicle-inspections').getPublicUrl(filePathDanni);
+          await supabase.from('verbali_foto').insert([
+            {
+              turno_id: turno.id,
+              tipo_controllo: 'checkin',
+              tipo_foto: 'danno',
+              foto_url: pUrlDanni.publicUrl,
+              targa: targa.toUpperCase(),
+              autista_nome: autistaNome,
+              coordinate_gps: gpsPos || null,
+            },
+          ]);
+        }
+      }
+
+      alert(`Check-in registrato con successo!\nVerbale: ${codiceVerbale}`);
+      window.location.href = '/autista';
     } catch (err: any) {
-      console.error('Errore salvataggio check-in:', err);
-      alert(`Errore: ${err.message}`);
+      console.error(err);
+      setErrorMsg(err.message || 'Errore durante la registrazione del check-in.');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
+  if (loadingInit) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FB] flex items-center justify-center text-xs text-gray-500 font-bold">
+        <Loader2 className="w-5 h-5 animate-spin mr-2 text-[#E05353]" />
+        Inizializzazione check-in...
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] pb-20 antialiased">
+      {/* Header */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-30 px-4 py-3">
         <div className="max-w-xl mx-auto flex items-center justify-between">
-          <button 
-            type="button"
-            onClick={() => router.replace('/autista')}
+          <Link 
+            href="/autista" 
             className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
-          </button>
+          </Link>
           <div className="text-center">
             <h1 className="font-extrabold text-sm uppercase tracking-wider">Inizio Turno (Check-in)</h1>
-            <p className="text-[11px] text-gray-400 font-medium">Presa in Carico Mezzo</p>
+            <p className="text-[11px] text-gray-400 font-medium">Assegnazione Mezzo e Perizia Digitale</p>
           </div>
           <div className="w-10 h-10" />
         </div>
       </header>
 
-      <main className="max-w-xl mx-auto px-4 pt-4">
-        {checkingToday ? (
-          <div className="bg-white rounded-3xl p-6 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
-            <Loader2 className="w-4 h-4 animate-spin text-[#E05353]" />
-            Verifica disponibilità turno...
+      <main className="max-w-xl mx-auto px-4 pt-4 space-y-4">
+        {errorMsg && (
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-[#E05353] text-xs font-bold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{errorMsg}</span>
           </div>
-        ) : giaRegistratoOggi ? (
-          <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 text-center space-y-3">
-            <div className="w-12 h-12 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto">
-              <ShieldAlert className="w-6 h-6" />
-            </div>
-            <h2 className="font-extrabold text-base text-amber-900">Check-in Già Effettuato Oggi</h2>
-            <p className="text-xs text-amber-700 leading-relaxed max-w-sm mx-auto">
-              Hai già un turno aperto per la giornata odierna.
-            </p>
-            <button
-              onClick={() => router.replace('/autista')}
-              className="mt-2 py-3 px-6 bg-amber-700 hover:bg-amber-800 text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition-all"
-            >
-              Torna alla Home Autista
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
-                1. Committente di Oggi
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {(['CITI', 'EDF', 'RHENUS'] as const).map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => setAppalto(item)}
-                    className={`py-3 rounded-2xl font-black text-xs transition-all border ${
-                      appalto === item
-                        ? item === 'CITI' ? 'bg-[#E05353] text-white border-[#E05353] shadow-sm' :
-                          item === 'EDF' ? 'bg-blue-600 text-white border-blue-600 shadow-sm' :
-                          'bg-teal-700 text-white border-teal-700 shadow-sm'
-                        : 'bg-gray-50 border-gray-100 text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            </div>
+        )}
 
-            <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
-                2. Dati Mezzo & Chilometri
-              </label>
-              <div>
-                <label className="text-xs font-semibold text-gray-600 mb-1 block">Targa o Matricola Mezzo</label>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          
+          {/* Dati Mezzo & Appalto */}
+          <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
+              1. Selezione Veicolo & Appalto
+            </label>
+
+            <div>
+              <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Targa Mezzo</label>
+              {veicoli.length > 0 ? (
+                <select
+                  value={targa}
+                  onChange={(e) => setTarga(e.target.value)}
+                  className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                  required
+                >
+                  {veicoli.map((v) => (
+                    <option key={v.targa} value={v.targa}>
+                      {v.targa} — {v.modello || 'Furgone'}
+                    </option>
+                  ))}
+                </select>
+              ) : (
                 <input
                   type="text"
-                  required
                   placeholder="es. FY123AB"
                   value={targa}
                   onChange={(e) => setTarga(e.target.value.toUpperCase())}
                   className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold uppercase focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-gray-600 mb-1 block">Km Iniziali Quadro Strumenti</label>
-                <input
-                  type="number"
                   required
-                  placeholder="es. 124500"
-                  value={kmInizio}
-                  onChange={(e) => setKmInizio(e.target.value)}
-                  className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
                 />
-              </div>
-            </div>
-
-            <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                  3. Firma Presa in Carico
-                </label>
-                <button
-                  type="button"
-                  onClick={clearSignature}
-                  className="text-[11px] font-bold text-gray-400 hover:text-[#E05353] flex items-center gap-1"
-                >
-                  <RotateCcw className="w-3 h-3" /> Pulisci
-                </button>
-              </div>
-
-              <div className="border border-gray-200 rounded-2xl overflow-hidden bg-[#F8F9FB]">
-                <canvas
-                  ref={canvasRef}
-                  width={340}
-                  height={130}
-                  className="w-full touch-none cursor-crosshair"
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
-                  onTouchStart={startDrawing}
-                  onTouchMove={draw}
-                  onTouchEnd={stopDrawing}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-4 bg-[#E05353] hover:bg-[#c94545] disabled:bg-gray-300 text-white rounded-2xl font-black text-sm tracking-wider uppercase shadow-md flex items-center justify-center gap-2 transition-all"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Registrazione in corso...
-                </>
-              ) : (
-                'Conferma Presa in Carico & Inizia Turno'
               )}
-            </button>
-          </form>
-        )}
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Appalto di Riferimento</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(['CITI', 'EDF', 'RHENUS'] as const).map((app) => (
+                  <button
+                    key={app}
+                    type="button"
+                    onClick={() => setAppalto(app)}
+                    className={`py-2.5 rounded-xl font-bold text-xs transition border ${
+                      appalto === app
+                        ? 'bg-[#1E242B] text-white border-[#1E242B]'
+                        : 'bg-gray-50 border-gray-100 text-gray-600'
+                    }`}
+                  >
+                    {app}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Km & Foto Quadro con Watermark */}
+          <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-4">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
+              2. Chilometri & Foto Quadro Strumenti
+            </label>
+
+            <div>
+              <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Km alla Partenza</label>
+              <input
+                type="number"
+                placeholder="es. 124500"
+                value={kmInizio}
+                onChange={(e) => setKmInizio(e.target.value)}
+                className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                required
+              />
+            </div>
+
+            {/* Upload Foto Quadro con Fotocamera */}
+            <div>
+              <label className="text-xs font-semibold text-gray-600 mb-1.5 block flex items-center justify-between">
+                <span>Foto Quadro Km (Obbligatoria)</span>
+                <span className="text-[10px] text-emerald-600 font-bold">● Timbro Digitale GPS</span>
+              </label>
+              <label className="border-2 border-dashed border-gray-200 hover:border-[#E05353] rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer bg-[#F8F9FB] transition">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => setFotoQuadro(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+                <Camera className="w-7 h-7 text-[#E05353] mb-1.5" />
+                <span className="text-xs font-bold text-gray-700">
+                  {fotoQuadro ? `✓ ${fotoQuadro.name}` : 'Scatta Foto al Quadro Acceso'}
+                </span>
+                <span className="text-[10px] text-gray-400 mt-0.5">Applica automaticamente data, ora e coordinate</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Stato Carrozzeria & Danni Preesistenti */}
+          <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
+              3. Segnalazione Danni Carrozzeria (Opzionale)
+            </label>
+
+            <textarea
+              rows={2}
+              placeholder="Segnala graffi, ammaccature o spie accese..."
+              value={noteInizio}
+              onChange={(e) => setNoteInizio(e.target.value)}
+              className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-4 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+            />
+
+            <label className="border border-dashed border-gray-200 rounded-2xl p-3 flex items-center justify-center gap-2 cursor-pointer bg-[#F8F9FB] hover:bg-gray-100 transition">
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => setFotoDanni(e.target.files?.[0] || null)}
+                className="hidden"
+              />
+              <UploadCloud className="w-4 h-4 text-gray-500" />
+              <span className="text-xs font-bold text-gray-600">
+                {fotoDanni ? `✓ Foto Danno: ${fotoDanni.name}` : 'Scatta Foto Eventuale Danno'}
+              </span>
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded-2xl font-black text-sm tracking-wider uppercase shadow-md flex items-center justify-center gap-2 transition-all"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Certificazione Watermark & Invio...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-5 h-5" />
+                Conferma Check-in & Avvia Servizio
+              </>
+            )}
+          </button>
+        </form>
       </main>
     </div>
   );
