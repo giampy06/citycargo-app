@@ -28,7 +28,8 @@ import {
   Clock,
   Eye,
   Loader2,
-  LogOut
+  LogOut,
+  FileSignature
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -377,8 +378,8 @@ export default function AdminDashboardPage() {
           )}
         </section>
 
-        {/* 4 MODULI GESTIONALI */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 5 MODULI GESTIONALI */}
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
           
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
             <div className="space-y-3">
@@ -464,6 +465,29 @@ export default function AdminDashboardPage() {
               className="mt-4 w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-2xl font-bold text-xs tracking-wider uppercase shadow-sm flex items-center justify-center gap-1.5 transition-all text-center"
             >
               Gestisci Cedolini
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {/* CARD 5: DOCUMENTI E FIRME */}
+          <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+            <div className="space-y-3">
+              <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center">
+                <FileSignature className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Legale & GDPR</span>
+                <h3 className="text-base font-black text-[#1E242B] mt-0.5">Registro Firme</h3>
+                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                  Circolari inviate, prese visioni e validità telematica.
+                </p>
+              </div>
+            </div>
+            <Link 
+              href="/documenti" 
+              className="mt-4 w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-bold text-xs tracking-wider uppercase shadow-sm flex items-center justify-center gap-1.5 transition-all text-center"
+            >
+              Apri Registro
               <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
