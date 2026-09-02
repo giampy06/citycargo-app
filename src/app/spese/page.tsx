@@ -18,7 +18,8 @@ import {
   TrendingUp,
   BarChart3,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
 
 export default function GestioneSpesePage() {
@@ -124,6 +125,26 @@ export default function GestioneSpesePage() {
       alert(`Errore: ${err.message}`);
     } finally {
       setUploading(false);
+    }
+  };
+
+  // Funzione per eliminare una spesa / fattura registrata
+  const handleEliminaSpesa = async (id: string) => {
+    const conferma = window.confirm("Sei sicuro di voler eliminare questa spesa/fattura? L'operazione è irreversibile.");
+    if (!conferma) return;
+
+    try {
+      const { error } = await supabase
+        .from('vehicle_expenses')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      setSpese(spese.filter(s => s.id !== id));
+      alert('Spesa eliminata con successo.');
+    } catch (err: any) {
+      alert(`Errore eliminazione: ${err.message}`);
     }
   };
 
@@ -390,7 +411,7 @@ export default function GestioneSpesePage() {
             </form>
           </div>
 
-          {/* Elenco & Filtro Spese */}
+          {/* Elenco & Filtro Spese con Tasto Elimina */}
           <div className="lg:col-span-2 bg-[#1E293B] border border-slate-700/70 rounded-3xl p-6 shadow-xl space-y-4">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
               <h2 className="font-bold text-base flex items-center gap-2 text-white">
@@ -439,17 +460,28 @@ export default function GestioneSpesePage() {
                       <span className="text-[10px] text-slate-500 block">{s.data_spesa}</span>
                     </div>
 
-                    {s.fattura_url && (
-                      <a
-                        href={s.fattura_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition text-xs"
+                    <div className="flex items-center gap-2">
+                      {s.fattura_url && (
+                        <a
+                          href={s.fattura_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition text-xs"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-red-400" />
+                          Vedi Fattura
+                        </a>
+                      )}
+
+                      {/* Pulsante Elimina Spesa */}
+                      <button
+                        onClick={() => handleEliminaSpesa(s.id)}
+                        className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl transition"
+                        title="Elimina spesa"
                       >
-                        <ExternalLink className="w-3.5 h-3.5 text-red-400" />
-                        Vedi Fattura
-                      </a>
-                    )}
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
