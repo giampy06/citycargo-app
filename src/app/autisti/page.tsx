@@ -19,7 +19,8 @@ import {
   Loader2,
   Send,
   FileCheck,
-  Megaphone
+  Megaphone,
+  Trash2
 } from 'lucide-react';
 
 export default function GestioneAutistiPage() {
@@ -76,6 +77,25 @@ export default function GestioneAutistiPage() {
       alert(`Autista ${email} approvato con successo!`);
     } catch (err: any) {
       alert(`Errore approvazione: ${err.message}`);
+    }
+  };
+
+  // Funzione per eliminare l'autista
+  const handleEliminaAutista = async (id: string, nomeCompleto: string) => {
+    const conferma = window.confirm(`⚠️ ATTENZIONE: Sei sicuro di voler ELIMINARE definitivamente l'autista ${nomeCompleto}? L'operazione è irreversibile.`);
+    if (!conferma) return;
+
+    try {
+      const { error } = await supabase
+        .from('autisti')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      alert('Autista eliminato con successo.');
+      fetchAutisti();
+    } catch (err: any) {
+      alert(`Errore cancellazione: ${err.message}`);
     }
   };
 
@@ -314,12 +334,23 @@ export default function GestioneAutistiPage() {
                     </span>
                   )}
 
-                  <button
-                    onClick={() => handleOpenFascicolo(autista)}
-                    className="px-3.5 py-1.5 bg-[#1E242B] hover:bg-black text-white text-xs font-bold rounded-xl transition shadow-sm"
-                  >
-                    Fascicolo & Documenti
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleOpenFascicolo(autista)}
+                      className="px-3.5 py-1.5 bg-[#1E242B] hover:bg-black text-white text-xs font-bold rounded-xl transition shadow-sm"
+                    >
+                      Fascicolo & Documenti
+                    </button>
+
+                    {/* PULSANTE ELIMINA AUTISTA */}
+                    <button
+                      onClick={() => handleEliminaAutista(autista.id, `${autista.nome} ${autista.cognome}`)}
+                      className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition"
+                      title="Elimina Autista"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
