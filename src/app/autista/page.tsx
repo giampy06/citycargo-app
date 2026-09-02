@@ -15,7 +15,8 @@ import {
   FileSignature, 
   ShieldCheck,
   X,
-  Gauge
+  Banknote,
+  Download
 } from 'lucide-react';
 
 export default function AppAutistaDashboard() {
@@ -25,6 +26,7 @@ export default function AppAutistaDashboard() {
   const [turnoAttivo, setTurnoAttivo] = useState<any | null>(null);
   const [mieiTurni, setMieiTurni] = useState<any[]>([]);
   const [documenti, setDocumenti] = useState<any[]>([]);
+  const [cedolini, setCedolini] = useState<any[]>([]);
 
   // Modale Firma Digitale
   const [docDaFirmare, setDocDaFirmare] = useState<any | null>(null);
@@ -40,7 +42,7 @@ export default function AppAutistaDashboard() {
         return;
       }
 
-      // Recupera profilo autista
+      // 1. Recupera profilo autista
       const { data: autistaData } = await supabase
         .from('autisti')
         .select('*')
@@ -49,7 +51,7 @@ export default function AppAutistaDashboard() {
 
       setAutista(autistaData);
 
-      // Recupera turno attivo se esiste
+      // 2. Recupera turno attivo se esiste
       const { data: turnoData } = await supabase
         .from('turni_presenze')
         .select('*')
@@ -59,7 +61,7 @@ export default function AppAutistaDashboard() {
 
       setTurnoAttivo(turnoData);
 
-      // Recupera storico turni dell'autista
+      // 3. Recupera storico turni dell'autista
       const { data: turniData } = await supabase
         .from('turni_presenze')
         .select('*')
@@ -68,8 +70,8 @@ export default function AppAutistaDashboard() {
 
       setMieiTurni(turniData || []);
 
-      // Recupera documenti aziendali inviati all'autista
       if (autistaData) {
+        // 4. Recupera documenti aziendali (Circolari da firmare)
         const { data: docData } = await supabase
           .from('documenti_aziendali')
           .select('*')
@@ -77,6 +79,18 @@ export default function AppAutistaDashboard() {
           .order('created_at', { ascending: false });
 
         setDocumenti(docData || []);
+
+        // 5. Recupera Buste Paga / Cedolini (ignora eventuali errori se la tabella è vuota)
+        try {
+          const { data: cedoliniData } = await supabase
+            .from('cedolini')
+            .select('*')
+            .eq('autista_id', autistaData.id)
+            .order('created_at', { ascending: false });
+          setCedolini(cedoliniData || []);
+        } catch (err) {
+          console.error("Tabella cedolini non ancora configurata", err);
+        }
       }
 
       setLoading(false);
@@ -193,7 +207,7 @@ export default function AppAutistaDashboard() {
           </div>
         ) : (
           <>
-            {/* Box Gestione Turno */}
+            {/* BOX 1: GESTIONE TURNO */}
             <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -227,7 +241,7 @@ export default function AppAutistaDashboard() {
               )}
             </div>
 
-            {/* SEZIONE DOCUMENTI & CIRCOLARI DA FIRMARE */}
+            {/* BOX 2: CIRCOLARI E DOCUMENTI */}
             <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-black text-sm flex items-center gap-2">
@@ -252,11 +266,7 @@ export default function AppAutistaDashboard() {
                       <div className="space-y-1 overflow-hidden">
                         <h4 className="font-extrabold text-xs text-[#1E242B] truncate">{doc.titolo}</h4>
                         <p className="text-[11px] text-gray-500 truncate">{doc.descrizione || 'Prendi visione e firma'}</p>
-                        <span className="text-[9px] text-gray-400 block">
-                          {new Date(doc.created_at).toLocaleDateString('it-IT')}
-                        </span>
                       </div>
-
                       <div className="flex-shrink-0">
                         {doc.firmato ? (
                           <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-xl flex items-center gap-1">
@@ -277,7 +287,44 @@ export default function AppAutistaDashboard() {
               )}
             </div>
 
-            {/* STORICO TURNI & PRESENZE */}
+            {/* BOX 3: BUSTE PAGA / CEDOLINI */}
+            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-sm flex items-center gap-2">
+                  <Banknote className="w-4 h-4 text-emerald-600" /> Buste Paga
+                </h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 rounded-full text-gray-600">
+                  {cedolini.length} cedolini
+                </span>
+              </div>
+
+              {cedolini.length === 0 ? (
+                <div className="py-4 text-center text-xs text-gray-400">
+                  Nessuna busta paga archiviata.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {cedolini.map((cedolino) => (
+                    <div key={cedolino.id} className="p-4 bg-[#F8F9FB] rounded-2xl border border-gray-100 flex items-center justify-between gap-3">
+                      <div>
+                        <h4 className="font-extrabold text-xs text-[#1E242B] uppercase">{cedolino.mese_riferimento || 'Cedolino'}</h4>
+                        <p className="text-[10px] text-gray-500">{new Date(cedolino.created_at).toLocaleDateString('it-IT')}</p>
+                      </div>
+                      <a
+                        href={cedolino.file_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-9 h-9 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 hover:text-emerald-600 transition"
+                      >
+                        <Download className="w-4 h-4" />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* BOX 4: STORICO TURNI & PRESENZE */}
             <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-black text-sm flex items-center gap-2">
@@ -293,7 +340,7 @@ export default function AppAutistaDashboard() {
               ) : (
                 <div className="space-y-2.5">
                   {mieiTurni.map((t) => (
-                    <div key={t.id} className="p-3.5 bg-[#F8F9FB] rounded-2xl flex items-center justify-between text-xs">
+                    <div key={t.id} className="p-3.5 bg-[#F8F9FB] rounded-2xl flex items-center justify-between text-xs border border-gray-100">
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-mono font-black text-[#1E242B]">{t.targa_mezzo}</span>
