@@ -1,16 +1,20 @@
 {
-  "name": "City Cargo Autisti",
-  "short_name": "City Cargo",
-  "description": "Gestionale Flotta e Presenze City Cargo",
-  "start_url": "/autista",
+  "name": "City Cargo",
+  "short_name": "CityCargo",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#F8F9FB",
   "theme_color": "#E05353",
   "icons": [
     {
-      "src": "/favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ]
 }
