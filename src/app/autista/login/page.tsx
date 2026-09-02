@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/supabase';
-import { Lock, Mail, Loader2, AlertCircle, User, ShieldCheck, Phone, CreditCard, Image as ImageIcon } from 'lucide-react';
+import { Lock, Mail, Loader2, AlertCircle, User, ShieldCheck, Phone, CreditCard, Shield } from 'lucide-react';
 import Link from 'next/link';
 
 export default function AutistaLoginPage() {
@@ -63,7 +63,7 @@ export default function AutistaLoginPage() {
         if (signUpError) throw new Error(signUpError.message);
         
         if (authData.user) {
-          // 2. Upload Foto Patente Fronte nel bucket (usiamo documenti-veicoli che ha le policy aperte)
+          // 2. Upload Foto Patente Fronte nel bucket
           const extFronte = fotoFronte.name.split('.').pop();
           const pathFronte = `patenti/${authData.user.id}_fronte.${extFronte}`;
           const { error: errFronte } = await supabase.storage.from('documenti-veicoli').upload(pathFronte, fotoFronte);
@@ -77,7 +77,7 @@ export default function AutistaLoginPage() {
           if (errRetro) throw new Error('Errore nel caricamento della foto Patente Retro.');
           const urlRetro = supabase.storage.from('documenti-veicoli').getPublicUrl(pathRetro).data.publicUrl;
 
-          // 4. Salvataggio Profilo Autista Completo (con stato 'in_attesa')
+          // 4. Salvataggio Profilo Autista con prova formale GDPR
           const { error: dbError } = await supabase.from('autisti').insert([{
             id: authData.user.id,
             email: email.trim().toLowerCase(),
@@ -87,13 +87,16 @@ export default function AutistaLoginPage() {
             numero_patente: numeroPatente,
             foto_patente_fronte: urlFronte,
             foto_patente_retro: urlRetro,
-            stato: 'in_attesa' // <-- Bloccato in attesa di approvazione dal gestionale admin
+            stato: 'in_attesa',
+            consenso_privacy: true,
+            data_accettazione_privacy: new Date().toISOString(),
+            versione_privacy: 'v1.0-2026'
           }]);
 
           if (dbError) throw new Error('Errore durante il salvataggio dei dati nel database.');
           
           setSuccessMsg('Registrazione completata! I tuoi documenti sono in fase di revisione. Attendi l\'approvazione dell\'amministratore prima di poter accedere.');
-          setIsLogin(true); // Torna automaticamente alla schermata di login
+          setIsLogin(true);
         }
       }
     } catch (err: any) {
@@ -115,7 +118,7 @@ export default function AutistaLoginPage() {
             {isLogin ? 'Bentornato' : 'Candidatura Autista'}
           </h1>
           <p className="text-xs text-gray-400">
-            {isLogin ? 'Accedi al tuo portale conducente' : 'Compila tutti i campi per registrarti e inviare i tuoi documenti'}
+            {isLogin ? 'Accedi al tuo portale conducente' : 'Compila tutti i campi per registrarti'}
           </p>
         </div>
 
@@ -201,7 +204,7 @@ export default function AutistaLoginPage() {
             </div>
           </div>
 
-          {/* 🟢 SPUNTA PRIVACY OBBLIGATORIA (Solo Registrazione) */}
+          {/* SPUNTA PRIVACY OBBLIGATORIA (Solo Registrazione) */}
           {!isLogin && (
             <div className="flex items-start gap-2 pt-2 border-t border-gray-100 mt-4">
               <input
@@ -237,18 +240,30 @@ export default function AutistaLoginPage() {
           </button>
         </form>
 
-        <div className="text-center pt-4 border-t border-gray-100">
-          <button 
-            type="button"
-            onClick={() => {
-              setIsLogin(!isLogin);
-              setErrorMsg(null);
-              setSuccessMsg(null);
-            }}
-            className="text-[11px] text-gray-500 hover:text-gray-800 font-bold"
-          >
-            {isLogin ? "Nuovo autista? Clicca qui per registrarti" : "Hai già un account? Torna al Login"}
-          </button>
+        <div className="space-y-3 pt-4 border-t border-gray-100 text-center">
+          <div>
+            <button 
+              type="button"
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setErrorMsg(null);
+                setSuccessMsg(null);
+              }}
+              className="text-[11px] text-gray-500 hover:text-gray-800 font-bold transition"
+            >
+              {isLogin ? "Nuovo autista? Clicca qui per registrarti" : "Hai già un account? Torna al Login"}
+            </button>
+          </div>
+
+          <div>
+            <Link 
+              href="/login" 
+              className="inline-flex items-center gap-1.5 text-[11px] text-gray-400 hover:text-[#1E242B] font-semibold transition"
+            >
+              <Shield className="w-3.5 h-3.5 text-gray-400" />
+              Sei un amministratore? <span className="underline font-bold text-gray-600">Accedi qui</span>
+            </Link>
+          </div>
         </div>
       </div>
     </div>
