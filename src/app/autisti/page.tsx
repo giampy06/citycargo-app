@@ -1,38 +1,45 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { supabase } from '@/supabase';
 import { 
   Users, 
   ChevronLeft, 
   Search, 
-  RefreshCw, 
-  X, 
-  Loader2, 
-  Phone, 
   ShieldCheck, 
-  FileBadge, 
-  MessageSquare, 
-  Check, 
-  UserX, 
-  Clock,
-  ExternalLink,
-  Eye,
-  FileText
+  Calendar, 
+  FileText, 
+  CheckCircle2, 
+  XCircle, 
+  Clock, 
+  AlertTriangle,
+  ExternalLink, 
+  X, 
+  Loader2,
+  Send,
+  FileCheck
 } from 'lucide-react';
 
-export default function AutistiPage() {
+export default function GestioneAutistiPage() {
   const router = useRouter();
   const [autisti, setAutisti] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtroAppalto, setFiltroAppalto] = useState<string>('TUTTI');
+  const [filtroStato, setFiltroStato] = useState('TUTTI');
   const [ricerca, setRicerca] = useState('');
 
-  // Modale visualizzazione foto documento
-  const [docModalUrl, setDocModalUrl] = useState<string | null>(null);
-  const [docModalTitolo, setDocModalTitolo] = useState<string>('');
+  // Scheda Fascicolo Autista Selezionato
+  const [selectedAutista, setSelectedAutista] = useState<any | null>(null);
+  const [editVisitaMedica, setEditVisitaMedica] = useState('');
+  const [editCorsoSicurezza, setEditCorsoSicurezza] = useState('');
+  const [savingMedica, setSavingMedica] = useState(false);
+
+  // Invio Documento da Firmare
+  const [isDocModalOpen, setIsDocModalOpen] = useState(false);
+  const [titoloDoc, setTitoloDoc] = useState('');
+  const [descDoc, setDescDoc] = useState('');
+  const [fileDoc, setFileDoc] = useState<File | null>(null);
+  const [sendingDoc, setSendingDoc] = useState(false);
 
   const fetchAutisti = async () => {
     setLoading(true);
@@ -55,242 +62,136 @@ export default function AutistiPage() {
     fetchAutisti();
   }, []);
 
-  const getScadenzaBadge = (dataStr: string | null) => {
-    if (!dataStr) return { label: 'Non impostata', color: 'bg-gray-50 text-gray-500 border-gray-200' };
-    const oggi = new Date();
-    const scadenza = new Date(dataStr);
-    const diffGiorni = Math.ceil((scadenza.getTime() - oggi.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (diffGiorni < 0) return { label: `Scaduta (${Math.abs(diffGiorni)} gg fa)`, color: 'bg-rose-50 text-[#E05353] border-rose-200' };
-    if (diffGiorni <= 30) return { label: `Scade tra ${diffGiorni} gg`, color: 'bg-amber-50 text-amber-700 border-amber-200' };
-    return { label: `Regolare (${diffGiorni} gg)`, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
-  };
-
-  const handleApprovaAutista = async (autista: any, appaltoScelto: string) => {
+  const handleApprova = async (id: string, email: string) => {
     try {
       const { error } = await supabase
         .from('autisti')
-        .update({
-          stato: 'attivo',
-          appalto_default: appaltoScelto,
-          data_approvazione: new Date().toISOString(),
-        })
-        .eq('id', autista.id);
+        .update({ stato: 'attivo' })
+        .eq('id', id);
 
       if (error) throw error;
-
-      alert(`Autista ${autista.nome} ${autista.cognome} convalidato ed abilitato al servizio!`);
-      fetchAutisti();
+      setAutisti(autisti.map(a => a.id === id ? { ...a, stato: 'attivo' } : a));
+      alert(`Autista ${email} approvato con successo!`);
     } catch (err: any) {
       alert(`Errore approvazione: ${err.message}`);
     }
   };
 
-  const handleRifiutaAutista = async (id: string, nomeCompleto: string) => {
-    const conferma = window.confirm(`Sei sicuro di voler rifiutare ed eliminare la richiesta di ${nomeCompleto}?`);
-    if (!conferma) return;
+  const handleOpenFascicolo = (autista: any) => {
+    setSelectedAutista(autista);
+    setEditVisitaMedica(autista.scadenza_visita_medica || '');
+    setEditCorsoSicurezza(autista.scadenza_corso_sicurezza || '');
+  };
+
+  const handleSalvaScadenzeMediche = async () => {
+    if (!selectedAutista) return;
+    setSavingMedica(true);
 
     try {
       const { error } = await supabase
         .from('autisti')
-        .delete()
-        .eq('id', id);
+        .update({
+          scadenza_visita_medica: editVisitaMedica || null,
+          scadenza_corso_sicurezza: editCorsoSicurezza || null,
+        })
+        .eq('id', selectedAutista.id);
 
       if (error) throw error;
 
-      alert('Richiesta eliminata.');
-      fetchAutisti();
+      const aggiornato = {
+        ...selectedAutista,
+        scadenza_visita_medica: editVisitaMedica || null,
+        scadenza_corso_sicurezza: editCorsoSicurezza || null,
+      };
+
+      setSelectedAutista(aggiornato);
+      setAutisti(autisti.map(a => a.id === aggiornato.id ? aggiornato : a));
+      alert('Scadenze mediche e sicurezza aggiornate!');
     } catch (err: any) {
-      alert(`Errore: ${err.message}`);
+      alert(`Errore salvataggio: ${err.message}`);
+    } finally {
+      setSavingMedica(false);
     }
   };
 
-  const handleUpdateStato = async (id: string, nuovoStato: string) => {
+  const handleInviaDocumentoFirma = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAutista || !fileDoc) {
+      alert('Seleziona un file da inviare.');
+      return;
+    }
+    setSendingDoc(true);
+
     try {
-      const { error } = await supabase
-        .from('autisti')
-        .update({ stato: nuovoStato })
-        .eq('id', id);
+      const ext = fileDoc.name.split('.').pop() || 'pdf';
+      const path = `documenti-firmati/${selectedAutista.email}/${Date.now()}.${ext}`;
 
-      if (error) throw error;
-      setAutisti(autisti.map(a => a.id === id ? { ...a, stato: nuovoStato } : a));
+      const { error: upErr } = await supabase.storage.from('documenti-veicoli').upload(path, fileDoc);
+      if (upErr) throw upErr;
+
+      const { data: urlData } = supabase.storage.from('documenti-veicoli').getPublicUrl(path);
+
+      const { error: dbErr } = await supabase.from('documenti_aziendali').insert([
+        {
+          titolo: titoloDoc,
+          descrizione: descDoc,
+          file_url: urlData.publicUrl,
+          autista_id: selectedAutista.id,
+          richiede_firma: true,
+          firmato: false
+        }
+      ]);
+
+      if (dbErr) throw dbErr;
+
+      alert('Documento inviato all\'autista per la firma digitale!');
+      setIsDocModalOpen(false);
+      setTitoloDoc('');
+      setDescDoc('');
+      setFileDoc(null);
     } catch (err: any) {
-      alert(`Errore aggiornamento stato: ${err.message}`);
+      alert(`Errore invio documento: ${err.message}`);
+    } finally {
+      setSendingDoc(false);
     }
   };
 
-  const autistiInAttesa = autisti.filter(a => a.stato === 'in_attesa');
-  const autistiApprovati = autisti.filter(a => a.stato !== 'in_attesa');
-
-  const autistiFiltrati = autistiApprovati.filter(a => {
-    const matchAppalto = filtroAppalto === 'TUTTI' || a.appalto_default === filtroAppalto;
-    const nomeCompleto = `${a.nome} ${a.cognome}`.toLowerCase();
-    const matchRicerca = nomeCompleto.includes(ricerca.toLowerCase()) || 
-                         (a.codice_fiscale && a.codice_fiscale.toLowerCase().includes(ricerca.toLowerCase())) ||
-                         (a.telefono && a.telefono.includes(ricerca));
-    return matchAppalto && matchRicerca;
+  const autistiFiltrati = autisti.filter(a => {
+    const matchStato = filtroStato === 'TUTTI' || a.stato === filtroStato;
+    const matchRicerca = !ricerca || 
+      a.nome?.toLowerCase().includes(ricerca.toLowerCase()) || 
+      a.cognome?.toLowerCase().includes(ricerca.toLowerCase()) ||
+      a.email?.toLowerCase().includes(ricerca.toLowerCase());
+    return matchStato && matchRicerca;
   });
 
   return (
-    <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] pb-24 antialiased font-sans">
-      {/* Header */}
+    <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] pb-24 font-sans antialiased">
       <header className="bg-white border-b border-gray-100 sticky top-0 z-30 px-4 py-3 sm:px-8">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button 
-              type="button"
               onClick={() => router.push('/')}
-              className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
+              className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="font-extrabold text-base tracking-tight">Anagrafica Personale & Documenti Autisti</h1>
-              <p className="text-[11px] text-gray-400 font-medium">Controllo Foto Patenti, CQC e Approvazioni</p>
+              <h1 className="font-extrabold text-base tracking-tight">Anagrafica Personale & Autisti</h1>
+              <p className="text-[11px] text-gray-400 font-medium">Fascicoli Dipendenti, Patenti, Visite Mediche e Firma Digitale</p>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={fetchAutisti}
-              className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#E05353]' : ''}`} />
-            </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-8 pt-6 space-y-6">
-
-        {/* 🟡 RICHIESTE IN ATTESA CON FOTO DOCUMENTI ALLEGATE */}
-        {autistiInAttesa.length > 0 && (
-          <section className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300 rounded-3xl p-5 sm:p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-black text-amber-950 uppercase tracking-wider">
-                    Richieste di Registrazione con Foto Documenti ({autistiInAttesa.length})
-                  </h2>
-                  <p className="text-[11px] text-amber-800">
-                    Clicca sulle foto allegate per verificare la validità dei documenti prima di approvare
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {autistiInAttesa.map((richiesta) => (
-                <div key={richiesta.id} className="bg-white rounded-2xl p-4 border border-amber-200 shadow-sm space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-extrabold text-sm text-[#1E242B] capitalize">
-                        {richiesta.nome} {richiesta.cognome}
-                      </h3>
-                      <span className="text-[11px] text-gray-500 font-mono">{richiesta.email}</span>
-                    </div>
-                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-100 text-amber-800">
-                      🟡 In Attesa
-                    </span>
-                  </div>
-
-                  <div className="text-[11px] bg-[#F8F9FB] p-2.5 rounded-xl space-y-1 text-gray-600">
-                    <p>Telefono: <b>{richiesta.telefono || '—'}</b> | CF: <b>{richiesta.codice_fiscale || '—'}</b></p>
-                    <p>N° Patente: <b>{richiesta.numero_patente || '—'}</b> (Scadenza: {richiesta.scadenza_patente || '—'})</p>
-                    {richiesta.possiede_cqc && (
-                      <p className="text-emerald-700 font-bold">✓ CQC Merci (Scad: {richiesta.scadenza_cqc || '—'})</p>
-                    )}
-                  </div>
-
-                  {/* Pulsanti Visualizzazione Foto Documenti */}
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Foto Documenti Caricate:</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {richiesta.foto_patente_fronte && (
-                        <button
-                          type="button"
-                          onClick={() => { setDocModalUrl(richiesta.foto_patente_fronte); setDocModalTitolo(`Patente Fronte - ${richiesta.nome} ${richiesta.cognome}`); }}
-                          className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-bold text-gray-700 flex items-center gap-1 transition"
-                        >
-                          <Eye className="w-3 h-3 text-[#E05353]" /> Patente Fronte
-                        </button>
-                      )}
-                      {richiesta.foto_patente_retro && (
-                        <button
-                          type="button"
-                          onClick={() => { setDocModalUrl(richiesta.foto_patente_retro); setDocModalTitolo(`Patente Retro - ${richiesta.nome} ${richiesta.cognome}`); }}
-                          className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-bold text-gray-700 flex items-center gap-1 transition"
-                        >
-                          <Eye className="w-3 h-3 text-[#E05353]" /> Patente Retro
-                        </button>
-                      )}
-                      {richiesta.foto_codice_fiscale && (
-                        <button
-                          type="button"
-                          onClick={() => { setDocModalUrl(richiesta.foto_codice_fiscale); setDocModalTitolo(`Codice Fiscale - ${richiesta.nome} ${richiesta.cognome}`); }}
-                          className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-bold text-gray-700 flex items-center gap-1 transition"
-                        >
-                          <Eye className="w-3 h-3 text-blue-600" /> Codice Fiscale
-                        </button>
-                      )}
-                      {richiesta.foto_cqc && (
-                        <button
-                          type="button"
-                          onClick={() => { setDocModalUrl(richiesta.foto_cqc); setDocModalTitolo(`CQC - ${richiesta.nome} ${richiesta.cognome}`); }}
-                          className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-bold text-gray-700 flex items-center gap-1 transition"
-                        >
-                          <Eye className="w-3 h-3 text-emerald-600" /> CQC
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Tasti Decisione Admin */}
-                  <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-                    <button
-                      onClick={() => handleApprovaAutista(richiesta, 'CITI')}
-                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition shadow-sm"
-                    >
-                      <Check className="w-3.5 h-3.5" /> Approva (CITI)
-                    </button>
-                    <button
-                      onClick={() => handleApprovaAutista(richiesta, 'EDF')}
-                      className="py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs transition"
-                      title="Approva per EDF"
-                    >
-                      EDF
-                    </button>
-                    <button
-                      onClick={() => handleApprovaAutista(richiesta, 'RHENUS')}
-                      className="py-2 px-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs transition"
-                      title="Approva per RHENUS"
-                    >
-                      RHENUS
-                    </button>
-                    <button
-                      onClick={() => handleRifiutaAutista(richiesta.id, `${richiesta.nome} ${richiesta.cognome}`)}
-                      className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition"
-                      title="Rifiuta ed elimina"
-                    >
-                      <UserX className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
         {/* Ricerca e Filtri */}
         <div className="bg-white rounded-3xl p-4 border border-gray-100 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
           <div className="relative w-full sm:w-80">
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input 
               type="text"
-              placeholder="Cerca tra gli autisti convalidati..."
+              placeholder="Cerca autista per nome o email..."
               value={ricerca}
               onChange={(e) => setRicerca(e.target.value)}
               className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl pl-10 pr-4 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
@@ -298,183 +199,268 @@ export default function AutistiPage() {
           </div>
 
           <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-            {['TUTTI', 'CITI', 'EDF', 'RHENUS'].map((f) => (
+            {['TUTTI', 'in_attesa', 'attivo', 'sospeso'].map((s) => (
               <button
-                key={f}
-                onClick={() => setFiltroAppalto(f)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                  filtroAppalto === f
+                key={s}
+                onClick={() => setFiltroStato(s)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition whitespace-nowrap ${
+                  filtroStato === s
                     ? 'bg-[#1E242B] text-white shadow-sm'
                     : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
                 }`}
               >
-                {f}
+                {s.replace('_', ' ')}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Griglia Autisti Approvati */}
+        {/* Tabella / Lista Autisti */}
         {loading ? (
           <div className="py-20 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-[#E05353]" />
-            Caricamento anagrafica autisti...
+            Caricamento anagrafiche...
           </div>
         ) : autistiFiltrati.length === 0 ? (
           <div className="py-16 text-center text-xs text-gray-400 bg-white rounded-3xl border border-gray-100">
-            Nessun autista attivo in archivio.
+            Nessun autista trovato in archivio.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {autistiFiltrati.map((autista) => {
-              const patenteStatus = getScadenzaBadge(autista.scadenza_patente);
-              const cqcStatus = autista.possiede_cqc ? getScadenzaBadge(autista.scadenza_cqc) : null;
-
-              return (
-                <div 
-                  key={autista.id} 
-                  className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between space-y-4 hover:shadow-md transition-shadow"
-                >
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-lg bg-rose-50 text-[#E05353]">
-                        {autista.appalto_default || 'CITI'}
-                      </span>
-                      
-                      <select
-                        value={autista.stato || 'attivo'}
-                        onChange={(e) => handleUpdateStato(autista.id, e.target.value)}
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border-0 focus:ring-0 cursor-pointer ${
-                          autista.stato === 'attivo' ? 'bg-emerald-50 text-emerald-700' :
-                          autista.stato === 'ferie' ? 'bg-blue-50 text-blue-700' :
-                          autista.stato === 'malattia' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-[#E05353]'
-                        }`}
-                      >
-                        <option value="attivo">● ATTIVO</option>
-                        <option value="ferie">● IN FERIE</option>
-                        <option value="malattia">● MALATTIA</option>
-                        <option value="sospeso">● SOSPESO</option>
-                      </select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {autistiFiltrati.map((autista) => (
+              <div 
+                key={autista.id}
+                className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between space-y-4 hover:shadow-md transition"
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-extrabold text-sm text-[#1E242B]">{autista.nome} {autista.cognome}</h3>
+                      <p className="text-[11px] text-gray-400">{autista.email}</p>
                     </div>
 
-                    <div className="mt-3">
-                      <h2 className="text-lg font-black text-[#1E242B] tracking-tight capitalize">
-                        {autista.nome} {autista.cognome}
-                      </h2>
-                      <p className="text-[11px] text-gray-500 font-mono mt-0.5">
-                        {autista.email}
-                      </p>
-                      <p className="text-[10px] text-gray-400 font-mono font-bold uppercase mt-0.5">
-                        {autista.codice_fiscale || 'CF non inserito'}
-                      </p>
-                    </div>
-
-                    <div className="mt-4 space-y-2 text-xs bg-[#F8F9FB] p-3 rounded-2xl">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-500 flex items-center gap-1.5 font-medium">
-                          <ShieldCheck className="w-3.5 h-3.5 text-gray-400" /> Patente:
-                        </span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${patenteStatus.color}`}>
-                          {patenteStatus.label}
-                        </span>
-                      </div>
-
-                      {/* Visione rapida foto documenti salvati */}
-                      <div className="pt-2 border-t border-gray-200/60 flex items-center gap-1">
-                        {autista.foto_patente_fronte && (
-                          <button
-                            type="button"
-                            onClick={() => { setDocModalUrl(autista.foto_patente_fronte); setDocModalTitolo(`Patente Fronte - ${autista.nome}`); }}
-                            className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[9px] font-bold text-gray-600 hover:text-[#E05353]"
-                          >
-                            Fronte
-                          </button>
-                        )}
-                        {autista.foto_patente_retro && (
-                          <button
-                            type="button"
-                            onClick={() => { setDocModalUrl(autista.foto_patente_retro); setDocModalTitolo(`Patente Retro - ${autista.nome}`); }}
-                            className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[9px] font-bold text-gray-600 hover:text-[#E05353]"
-                          >
-                            Retro
-                          </button>
-                        )}
-                        {autista.foto_codice_fiscale && (
-                          <button
-                            type="button"
-                            onClick={() => { setDocModalUrl(autista.foto_codice_fiscale); setDocModalTitolo(`Codice Fiscale - ${autista.nome}`); }}
-                            className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[9px] font-bold text-gray-600 hover:text-blue-600"
-                          >
-                            CF
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                      autista.stato === 'attivo' ? 'bg-emerald-50 text-emerald-700' :
+                      autista.stato === 'in_attesa' ? 'bg-amber-50 text-amber-700' :
+                      'bg-rose-50 text-[#E05353]'
+                    }`}>
+                      ● {autista.stato?.replace('_', ' ')}
+                    </span>
                   </div>
 
-                  {/* Contatti WhatsApp / Telefono */}
-                  <div className="pt-3 border-t border-gray-100 flex items-center gap-2">
-                    {autista.telefono ? (
-                      <>
-                        <a
-                          href={`tel:${autista.telefono}`}
-                          className="flex-1 py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition"
-                        >
-                          <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                          Chiama
-                        </a>
-                        <a
-                          href={`https://wa.me/${autista.telefono.replace(/[^0-9]/g, '')}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex-1 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition"
-                        >
-                          <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-                          WhatsApp
-                        </a>
-                      </>
-                    ) : (
-                      <span className="text-[11px] text-gray-400 py-1 text-center w-full">Nessun recapito telefonico</span>
-                    )}
+                  <div className="mt-3 space-y-1 text-xs bg-[#F8F9FB] p-3 rounded-2xl text-gray-600">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Telefono:</span>
+                      <b className="text-[#1E242B]">{autista.telefono || 'Non inserito'}</b>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Patente:</span>
+                      <b className="text-[#1E242B]">{autista.numero_patente || 'Non inserita'}</b>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Visita Medica:</span>
+                      <b className={autista.scadenza_visita_medica ? 'text-gray-800' : 'text-amber-600'}>
+                        {autista.scadenza_visita_medica || 'Da programmare'}
+                      </b>
+                    </div>
                   </div>
                 </div>
-              );
-            })}
+
+                <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+                  {autista.stato === 'in_attesa' ? (
+                    <button
+                      onClick={() => handleApprova(autista.id, autista.email)}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Approva Autista
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" /> Convalidato
+                    </span>
+                  )}
+
+                  <button
+                    onClick={() => handleOpenFascicolo(autista)}
+                    className="px-3.5 py-1.5 bg-[#1E242B] hover:bg-black text-white text-xs font-bold rounded-xl transition shadow-sm"
+                  >
+                    Fascicolo & Documenti
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </main>
 
-      {/* MODALE INGRANDIMENTO FOTO DOCUMENTO */}
-      {docModalUrl && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-5 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-              <h3 className="font-extrabold text-sm text-[#1E242B]">{docModalTitolo}</h3>
-              <div className="flex items-center gap-2">
-                <a
-                  href={docModalUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs font-bold text-[#E05353] flex items-center gap-1 hover:underline"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" /> Apri originale
-                </a>
-                <button 
-                  onClick={() => setDocModalUrl(null)}
-                  className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+      {/* 🟢 MODALE FASCICOLO PERSONALE & VISITE MEDICHE */}
+      {selectedAutista && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-xl w-full shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h2 className="font-black text-base text-[#1E242B]">
+                  {selectedAutista.nome} {selectedAutista.cognome}
+                </h2>
+                <p className="text-xs text-gray-400">Fascicolo Dipendente & Scadenziario</p>
+              </div>
+              <button 
+                onClick={() => setSelectedAutista(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Foto Patente e Documenti */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-extrabold text-[#1E242B] uppercase tracking-wider block">
+                Documenti Identità & Patente
+              </span>
+              <div className="grid grid-cols-2 gap-3">
+                {selectedAutista.foto_patente_fronte ? (
+                  <a
+                    href={selectedAutista.foto_patente_fronte}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-3 bg-[#F8F9FB] border border-gray-200 rounded-2xl text-center text-xs font-bold text-[#E05353] flex items-center justify-center gap-1 hover:bg-gray-100"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Patente Fronte
+                  </a>
+                ) : (
+                  <div className="p-3 bg-gray-50 rounded-2xl text-center text-xs text-gray-400">Patente Fronte non caricata</div>
+                )}
+
+                {selectedAutista.foto_patente_retro ? (
+                  <a
+                    href={selectedAutista.foto_patente_retro}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-3 bg-[#F8F9FB] border border-gray-200 rounded-2xl text-center text-xs font-bold text-[#E05353] flex items-center justify-center gap-1 hover:bg-gray-100"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Patente Retro
+                  </a>
+                ) : (
+                  <div className="p-3 bg-gray-50 rounded-2xl text-center text-xs text-gray-400">Patente Retro non caricata</div>
+                )}
               </div>
             </div>
 
-            <div className="bg-black rounded-2xl overflow-hidden flex items-center justify-center">
-              <img 
-                src={docModalUrl} 
-                alt="Documento Conducente"
-                className="max-h-[70vh] w-auto object-contain"
-              />
+            {/* Scadenze Sanitarie & Sicurezza */}
+            <div className="p-4 bg-[#F8F9FB] rounded-2xl space-y-3">
+              <span className="text-[11px] font-extrabold text-[#1E242B] uppercase tracking-wider block">
+                Scadenze Sanitarie & Formazione (D.Lgs 81/08)
+              </span>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Scad. Visita Medica</label>
+                  <input
+                    type="date"
+                    value={editVisitaMedica}
+                    onChange={(e) => setEditVisitaMedica(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Scad. Corso Sicurezza</label>
+                  <input
+                    type="date"
+                    value={editCorsoSicurezza}
+                    onChange={(e) => setEditCorsoSicurezza(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSalvaScadenzeMediche}
+                disabled={savingMedica}
+                className="w-full py-2.5 bg-[#1E242B] hover:bg-black text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition"
+              >
+                {savingMedica ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileCheck className="w-4 h-4 text-emerald-400" />}
+                Salva Scadenze
+              </button>
             </div>
+
+            {/* Sezione Invio Documenti per Firma Digitale */}
+            <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setIsDocModalOpen(true)}
+                className="px-4 py-2.5 bg-[#E05353] hover:bg-[#c94545] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition shadow-sm"
+              >
+                <Send className="w-4 h-4" /> Invia Documento per Firma Digitale
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedAutista(null)}
+                className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition"
+              >
+                Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODALE INVIO DOCUMENTO DA FIRMARE */}
+      {isDocModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-sm text-[#1E242B]">Invia Documento a {selectedAutista?.nome}</h3>
+              <button onClick={() => setIsDocModalOpen(false)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleInviaDocumentoFirma} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-gray-600 block mb-1">Titolo Documento / Circolare</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="es. Regolamento Aziendale 2026"
+                  value={titoloDoc}
+                  onChange={(e) => setTitoloDoc(e.target.value)}
+                  className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-600 block mb-1">Note o Istruzioni</label>
+                <textarea
+                  rows={2}
+                  placeholder="Prendere visione e firmare digitalmente..."
+                  value={descDoc}
+                  onChange={(e) => setDescDoc(e.target.value)}
+                  className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl p-3 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-600 block mb-1">File PDF o Immagine</label>
+                <input
+                  type="file"
+                  required
+                  accept=".pdf,image/*"
+                  onChange={(e) => setFileDoc(e.target.files?.[0] || null)}
+                  className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl p-2 font-medium"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={sendingDoc}
+                className="w-full py-3 bg-[#E05353] hover:bg-[#c94545] text-white rounded-xl font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition"
+              >
+                {sendingDoc ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                Invia all'App Conducente
+              </button>
+            </form>
           </div>
         </div>
       )}
