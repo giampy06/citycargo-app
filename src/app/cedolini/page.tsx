@@ -42,8 +42,8 @@ export default function AdminCedoliniPage() {
     setLoading(true);
     try {
       const [resCedolini, resAutisti] = await Promise.all([
-        supabase.from('buste_paga').select('*').order('created_at', { ascending: false }),
-        supabase.from('autisti').select('*').eq('attivo', true).order('nome_completo', { ascending: true })
+        supabase.from('cedolini').select('*').order('created_at', { ascending: false }),
+        supabase.from('autisti').select('*').eq('stato', 'attivo').order('cognome', { ascending: true })
       ]);
 
       if (resCedolini.error) throw resCedolini.error;
@@ -51,8 +51,10 @@ export default function AdminCedoliniPage() {
 
       setCedolini(resCedolini.data || []);
       setAutisti(resAutisti.data || []);
+      
+      // Imposta il primo autista come default se la lista non è vuota
       if (resAutisti.data && resAutisti.data.length > 0 && !autistaSelezionato) {
-        setAutistaSelezionato(resAutisti.data[0].nome_completo);
+        setAutistaSelezionato(resAutisti.data[0].id);
       }
     } catch (err: any) {
       console.error('Errore recupero dati:', err);
@@ -74,11 +76,20 @@ export default function AdminCedoliniPage() {
       return;
     }
 
+    if (!autistaSelezionato) {
+      setModalError('Seleziona un autista valido.');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
+      // Recupera il nome dell'autista per il nome del file e per il DB
+      const targetAutista = autisti.find(a => a.id === autistaSelezionato);
+      const nomeCompleto = targetAutista ? `${targetAutista.cognome} ${targetAutista.nome}` : 'Sconosciuto';
+
       const fileExt = filePdf.name.split('.').pop();
-      const cleanName = autistaSelezionato.replace(/\s+/g, '_');
+      const cleanName = nomeCompleto.replace(/\s+/g, '_');
       const fileName = `${Date.now()}-${cleanName}-${mese}-${anno}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
@@ -95,12 +106,14 @@ export default function AdminCedoliniPage() {
         .getPublicUrl(fileName);
 
       const { error: dbError } = await supabase
-        .from('buste_paga')
+        .from('cedolini')
         .insert([
           {
-            autista_nome: autistaSelezionato,
-            mese,
+            autista_id: autistaSelezionato,
+            autista_nome: nomeCompleto,
+            mese: mese,
             anno: Number(anno),
+            mese_riferimento: `${mese} ${anno}`, // Necessario per l'app autisti
             file_url: publicUrlData.publicUrl,
             firmato: false,
           },
@@ -111,7 +124,7 @@ export default function AdminCedoliniPage() {
       setFilePdf(null);
       setIsModalOpen(false);
       fetchData();
-      alert(`Busta paga caricata e assegnata a ${autistaSelezionato}!`);
+      alert(`Busta paga caricata e assegnata a ${nomeCompleto}!`);
     } catch (err: any) {
       setModalError(err.message || 'Errore durante il caricamento del file.');
     } finally {
@@ -232,9 +245,6 @@ export default function AdminCedoliniPage() {
                           <span className="font-semibold text-emerald-700">
                             Firmato il {new Date(item.data_firma).toLocaleString('it-IT')}
                           </span>
-                          <span className="font-mono text-[11px] text-gray-500">
-                            Prot: {item.codice_ricevuta}
-                          </span>
                         </>
                       ) : (
                         <span className="text-amber-600 font-semibold flex items-center gap-1">
@@ -261,12 +271,12 @@ export default function AdminCedoliniPage() {
                   {item.firmato ? (
                     <div className="py-2.5 px-4 bg-emerald-50 text-emerald-800 rounded-2xl font-bold text-xs flex items-center gap-1.5 border border-emerald-100">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      Firmato dall'Autista
+                      Firmato
                     </div>
                   ) : (
                     <div className="py-2.5 px-4 bg-amber-50 text-amber-800 rounded-2xl font-bold text-xs flex items-center gap-1.5 border border-amber-200">
                       <Clock className="w-4 h-4 text-amber-600" />
-                      Non ancora firmato
+                      Da firmare
                     </div>
                   )}
                 </div>
@@ -309,8 +319,8 @@ export default function AdminCedoliniPage() {
                   className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-600"
                 >
                   {autisti.map((a) => (
-                    <option key={a.id} value={a.nome_completo}>
-                      {a.nome_completo}
+                    <option key={a.id} value={a.id}>
+                      {a.cognome} {a.nome}
                     </option>
                   ))}
                 </select>
