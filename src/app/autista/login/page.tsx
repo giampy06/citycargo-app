@@ -247,7 +247,7 @@ export default function AutistaLoginPage() {
             }}
             className="text-[11px] text-gray-500 hover:text-gray-800 font-bold"
           >
-            {isLogin ? "Nuovo autista? Clicca qui per registrarti e inviare i documenti" : "Hai già un account? Torna al Login"}
+            {isLogin ? "Nuovo autista? Clicca qui per registrarti" : "Hai già un account? Torna al Login"}
           </button>
         </div>
       </div>
