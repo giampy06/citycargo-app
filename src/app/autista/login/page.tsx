@@ -3,28 +3,36 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/supabase';
-import { Lock, Mail, Loader2, AlertCircle, User, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, Loader2, AlertCircle, User, ShieldCheck, Phone, CreditCard, Image as ImageIcon } from 'lucide-react';
 import Link from 'next/link';
 
 export default function AutistaLoginPage() {
   const router = useRouter();
-  const [isLogin, setIsLogin] = useState(true); // true = Accedi, false = Registrati
+  const [isLogin, setIsLogin] = useState(true); 
   
-  // Campi form
+  // Campi base
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nome, setNome] = useState('');
   const [cognome, setCognome] = useState('');
   
-  // Spunta GDPR (obbligatoria solo per la registrazione)
+  // Campi Anagrafica Avanzata (Patente & Telefono)
+  const [telefono, setTelefono] = useState('');
+  const [numeroPatente, setNumeroPatente] = useState('');
+  const [fotoFronte, setFotoFronte] = useState<File | null>(null);
+  const [fotoRetro, setFotoRetro] = useState<File | null>(null);
+
+  // Spunta GDPR (obbligatoria)
   const [accettaPrivacy, setAccettaPrivacy] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
     setLoading(true);
 
     try {
@@ -38,32 +46,54 @@ export default function AutistaLoginPage() {
         router.push('/autista');
 
       } else {
-        // ---- LOGICA DI REGISTRAZIONE ----
+        // ---- LOGICA DI REGISTRAZIONE AVANZATA ----
         if (!accettaPrivacy) {
-          throw new Error('Devi accettare l\'Informativa sulla Privacy per poterti registrare.');
+          throw new Error('Devi accettare l\'Informativa sulla Privacy per registrarti.');
+        }
+        if (!fotoFronte || !fotoRetro) {
+          throw new Error('Devi caricare entrambe le foto della patente (Fronte e Retro).');
         }
 
-        const { data, error: signUpError } = await supabase.auth.signUp({
+        // 1. Registrazione in Supabase Auth
+        const { data: authData, error: signUpError } = await supabase.auth.signUp({
           email: email.trim().toLowerCase(),
           password: password,
         });
 
         if (signUpError) throw new Error(signUpError.message);
         
-        if (data.user) {
-          // Inserisce l'autista nel database con stato 'in_attesa'
+        if (authData.user) {
+          // 2. Upload Foto Patente Fronte nel bucket (usiamo documenti-veicoli che ha le policy aperte)
+          const extFronte = fotoFronte.name.split('.').pop();
+          const pathFronte = `patenti/${authData.user.id}_fronte.${extFronte}`;
+          const { error: errFronte } = await supabase.storage.from('documenti-veicoli').upload(pathFronte, fotoFronte);
+          if (errFronte) throw new Error('Errore nel caricamento della foto Patente Fronte.');
+          const urlFronte = supabase.storage.from('documenti-veicoli').getPublicUrl(pathFronte).data.publicUrl;
+
+          // 3. Upload Foto Patente Retro
+          const extRetro = fotoRetro.name.split('.').pop();
+          const pathRetro = `patenti/${authData.user.id}_retro.${extRetro}`;
+          const { error: errRetro } = await supabase.storage.from('documenti-veicoli').upload(pathRetro, fotoRetro);
+          if (errRetro) throw new Error('Errore nel caricamento della foto Patente Retro.');
+          const urlRetro = supabase.storage.from('documenti-veicoli').getPublicUrl(pathRetro).data.publicUrl;
+
+          // 4. Salvataggio Profilo Autista Completo (con stato 'in_attesa')
           const { error: dbError } = await supabase.from('autisti').insert([{
-            id: data.user.id,
+            id: authData.user.id,
             email: email.trim().toLowerCase(),
             nome: nome,
             cognome: cognome,
-            stato: 'in_attesa'
+            telefono: telefono,
+            numero_patente: numeroPatente,
+            foto_patente_fronte: urlFronte,
+            foto_patente_retro: urlRetro,
+            stato: 'in_attesa' // <-- Bloccato in attesa di approvazione dal gestionale admin
           }]);
 
-          if (dbError) throw new Error('Errore durante la creazione del profilo.');
+          if (dbError) throw new Error('Errore durante il salvataggio dei dati nel database.');
           
-          alert('Registrazione completata! Attendi che l\'amministratore approvi il tuo account.');
-          setIsLogin(true); // Torna alla schermata di login
+          setSuccessMsg('Registrazione completata! I tuoi documenti sono in fase di revisione. Attendi l\'approvazione dell\'amministratore prima di poter accedere.');
+          setIsLogin(true); // Torna automaticamente alla schermata di login
         }
       }
     } catch (err: any) {
@@ -74,18 +104,18 @@ export default function AutistaLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FB] flex items-center justify-center p-4 antialiased font-sans">
-      <div className="max-w-md w-full bg-white border border-gray-100 rounded-3xl p-8 shadow-xl space-y-6">
+    <div className="min-h-screen bg-[#F8F9FB] flex items-center justify-center p-4 antialiased font-sans py-10">
+      <div className={`w-full bg-white border border-gray-100 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6 ${isLogin ? 'max-w-md' : 'max-w-2xl'}`}>
         
         <div className="text-center space-y-2">
           <div className="w-14 h-14 bg-red-50 border border-red-100 text-[#E05353] rounded-2xl mx-auto flex items-center justify-center shadow-sm">
             <User className="w-7 h-7" />
           </div>
           <h1 className="text-2xl font-black text-[#1E242B] tracking-tight">
-            {isLogin ? 'Bentornato' : 'Crea Account'}
+            {isLogin ? 'Bentornato' : 'Candidatura Autista'}
           </h1>
           <p className="text-xs text-gray-400">
-            {isLogin ? 'Accedi al tuo portale conducente' : 'Registrati per iniziare i tuoi turni'}
+            {isLogin ? 'Accedi al tuo portale conducente' : 'Compila tutti i campi per registrarti e inviare i tuoi documenti'}
           </p>
         </div>
 
@@ -96,66 +126,84 @@ export default function AutistaLoginPage() {
           </div>
         )}
 
+        {successMsg && (
+          <div className="p-4 rounded-2xl bg-emerald-50 text-emerald-700 text-xs font-bold flex items-center gap-2.5">
+            <ShieldCheck className="w-5 h-5 flex-shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           
-          {/* Campi visibili solo durante la registrazione */}
+          {/* GRIGLIA CAMPI REGISTRAZIONE */}
           {!isLogin && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Nome</label>
-                <input
-                  type="text"
-                  required
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  className="w-full bg-[#F8F9FB] border border-gray-200 text-[#1E242B] rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-[#E05353]"
-                />
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Nome</label>
+                  <input type="text" required value={nome} onChange={(e) => setNome(e.target.value)} className="w-full bg-[#F8F9FB] border border-gray-200 text-[#1E242B] rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-[#E05353]"/>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Cognome</label>
+                  <input type="text" required value={cognome} onChange={(e) => setCognome(e.target.value)} className="w-full bg-[#F8F9FB] border border-gray-200 text-[#1E242B] rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-[#E05353]"/>
+                </div>
               </div>
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Cognome</label>
-                <input
-                  type="text"
-                  required
-                  value={cognome}
-                  onChange={(e) => setCognome(e.target.value)}
-                  className="w-full bg-[#F8F9FB] border border-gray-200 text-[#1E242B] rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-[#E05353]"
-                />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Telefono</label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input type="tel" required value={telefono} onChange={(e) => setTelefono(e.target.value)} className="w-full bg-[#F8F9FB] border border-gray-200 text-[#1E242B] rounded-xl pl-10 pr-4 py-3 text-xs font-semibold focus:outline-none focus:border-[#E05353]"/>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">N° Patente</label>
+                  <div className="relative">
+                    <CreditCard className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input type="text" required placeholder="es. U12345678" value={numeroPatente} onChange={(e) => setNumeroPatente(e.target.value)} className="w-full bg-[#F8F9FB] border border-gray-200 text-[#1E242B] rounded-xl pl-10 pr-4 py-3 text-xs font-semibold uppercase focus:outline-none focus:border-[#E05353]"/>
+                  </div>
+                </div>
               </div>
-            </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Scansione Patente Fronte</label>
+                  <div className="relative">
+                    <input type="file" accept="image/*" required onChange={(e) => setFotoFronte(e.target.files?.[0] || null)} className="w-full bg-white border border-gray-200 text-gray-600 rounded-xl px-3 py-2 text-[11px] font-medium file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-[#E05353] file:text-white hover:file:bg-[#c94545] cursor-pointer"/>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Scansione Patente Retro</label>
+                  <div className="relative">
+                    <input type="file" accept="image/*" required onChange={(e) => setFotoRetro(e.target.files?.[0] || null)} className="w-full bg-white border border-gray-200 text-gray-600 rounded-xl px-3 py-2 text-[11px] font-medium file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-[#E05353] file:text-white hover:file:bg-[#c94545] cursor-pointer"/>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
 
-          <div>
-            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Email</label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-[#F8F9FB] border border-gray-200 text-[#1E242B] rounded-xl pl-10 pr-4 py-3 text-xs font-semibold focus:outline-none focus:border-[#E05353]"
-              />
+          {/* CAMPI SEMPRE VISIBILI (EMAIL E PASSWORD) */}
+          <div className={`grid grid-cols-1 ${!isLogin ? 'sm:grid-cols-2 gap-4' : 'gap-4'}`}>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Email</label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-[#F8F9FB] border border-gray-200 text-[#1E242B] rounded-xl pl-10 pr-4 py-3 text-xs font-semibold focus:outline-none focus:border-[#E05353]"/>
+              </div>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Password</label>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[#F8F9FB] border border-gray-200 text-[#1E242B] rounded-xl pl-10 pr-4 py-3 text-xs font-semibold focus:outline-none focus:border-[#E05353]"
-              />
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Password</label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-[#F8F9FB] border border-gray-200 text-[#1E242B] rounded-xl pl-10 pr-4 py-3 text-xs font-semibold focus:outline-none focus:border-[#E05353]"/>
+              </div>
             </div>
           </div>
 
           {/* 🟢 SPUNTA PRIVACY OBBLIGATORIA (Solo Registrazione) */}
           {!isLogin && (
-            <div className="flex items-start gap-2 pt-2">
+            <div className="flex items-start gap-2 pt-2 border-t border-gray-100 mt-4">
               <input
                 type="checkbox"
                 id="privacy"
@@ -169,7 +217,7 @@ export default function AutistaLoginPage() {
                 <Link href="/privacy" target="_blank" className="text-[#E05353] font-bold hover:underline mx-1">
                   Informativa sulla Privacy (GDPR)
                 </Link>
-                e acconsento al trattamento dei miei dati personali, dei documenti e della geolocalizzazione per finalità lavorative.
+                e acconsento al trattamento dei miei dati personali, al caricamento dei miei documenti d'identità e alla geolocalizzazione per finalità lavorative.
               </label>
             </div>
           )}
@@ -177,14 +225,14 @@ export default function AutistaLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-2 py-3.5 bg-[#E05353] hover:bg-[#c94545] disabled:opacity-50 text-white font-extrabold text-xs rounded-xl uppercase tracking-wider transition shadow-lg shadow-red-600/20 flex items-center justify-center gap-2"
+            className="w-full mt-4 py-3.5 bg-[#E05353] hover:bg-[#c94545] disabled:opacity-50 text-white font-extrabold text-xs rounded-xl uppercase tracking-wider transition shadow-lg shadow-red-600/20 flex items-center justify-center gap-2"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : isLogin ? (
               'Accedi al Portale'
             ) : (
-              'Registrati Ora'
+              'Invia Candidatura e Documenti'
             )}
           </button>
         </form>
@@ -195,10 +243,11 @@ export default function AutistaLoginPage() {
             onClick={() => {
               setIsLogin(!isLogin);
               setErrorMsg(null);
+              setSuccessMsg(null);
             }}
             className="text-[11px] text-gray-500 hover:text-gray-800 font-bold"
           >
-            {isLogin ? "Non hai un account? Registrati" : "Hai già un account? Accedi"}
+            {isLogin ? "Nuovo autista? Clicca qui per registrarti e inviare i documenti" : "Hai già un account? Torna al Login"}
           </button>
         </div>
       </div>
