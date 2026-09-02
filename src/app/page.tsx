@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/supabase';
+import NotificationsBell from '@/components/NotificationsBell';
 import { 
   ShieldCheck, 
   FileText, 
@@ -274,6 +275,9 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* CAMPANELLA NOTIFICHE */}
+            <NotificationsBell />
+
             <button 
               onClick={exportToExcelCSV}
               className="h-9 px-3 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center gap-1.5 transition-colors border border-emerald-200"
