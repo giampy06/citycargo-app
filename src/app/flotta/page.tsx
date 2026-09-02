@@ -21,7 +21,9 @@ import {
   Camera,
   Eye,
   ExternalLink,
-  AlertCircle
+  AlertCircle,
+  Receipt,
+  Euro
 } from 'lucide-react';
 
 export default function FlottaPage() {
@@ -38,6 +40,10 @@ export default function FlottaPage() {
   const [editAssicurazione, setEditAssicurazione] = useState('');
   const [editRevisione, setEditRevisione] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Storico Costi Mezzo Corrente nella Modale
+  const [speseMezzo, setSpeseMezzo] = useState<any[]>([]);
+  const [loadingSpese, setLoadingSpese] = useState(false);
 
   // Upload Foto Documenti
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
@@ -76,13 +82,31 @@ export default function FlottaPage() {
     fetchVeicoli();
   }, []);
 
-  // Apertura Scheda Furgone
-  const handleOpenScheda = (veicolo: any) => {
+  // Apertura Scheda Furgone e recupero storico costi collegati
+  const handleOpenScheda = async (veicolo: any) => {
     setSelectedVeicolo(veicolo);
     setEditKm(veicolo.km_attuali?.toString() || '');
     setEditNote(veicolo.note || '');
     setEditAssicurazione(veicolo.scadenza_assicurazione || '');
     setEditRevisione(veicolo.scadenza_revisione || '');
+
+    // Recupera spese/fatture specifiche per questa targa
+    setLoadingSpese(true);
+    try {
+      const { data, error } = await supabase
+        .from('vehicle_expenses')
+        .select('*')
+        .eq('targa', veicolo.targa)
+        .order('data_spesa', { ascending: false });
+
+      if (!error) {
+        setSpeseMezzo(data || []);
+      }
+    } catch (err) {
+      console.error('Errore recupero spese mezzo:', err);
+    } finally {
+      setLoadingSpese(false);
+    }
   };
 
   // Upload Foto Documento del Mezzo (Libretto, Assicurazione, Revisione)
@@ -154,7 +178,7 @@ export default function FlottaPage() {
     }
   };
 
-  // Cambio Stato Veicolo (Disponibile / In Uso / Manutenzione / Fermo)
+  // Cambio Stato Veicolo
   const handleUpdateStato = async (id: string, nuovoStato: string) => {
     try {
       const { error } = await supabase
@@ -186,7 +210,6 @@ export default function FlottaPage() {
 
       if (error) throw error;
 
-      // Rimozione immediata dallo stato locale
       setVeicoli(prev => prev.filter(v => v.id !== id));
       if (selectedVeicolo?.id === id) setSelectedVeicolo(null);
       alert(`Furgone ${targaMezzo} eliminato con successo!`);
@@ -240,6 +263,8 @@ export default function FlottaPage() {
       v.modello?.toLowerCase().includes(ricerca.toLowerCase());
     return matchStato && matchRicerca;
   });
+
+  const totaleCostiMezzo = speseMezzo.reduce((acc, curr) => acc + Number(curr.importo || 0), 0);
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] pb-24 antialiased font-sans">
@@ -308,7 +333,7 @@ export default function FlottaPage() {
           </div>
         </div>
 
-        {/* Griglia Furgoni con Scheda Furgone e Tasto Elimina */}
+        {/* Griglia Furgoni */}
         {loading ? (
           <div className="py-20 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-[#E05353]" />
@@ -331,7 +356,6 @@ export default function FlottaPage() {
                       {veicolo.targa}
                     </span>
 
-                    {/* Menu Stato Mezzo */}
                     <select
                       value={veicolo.stato || 'disponibile'}
                       onChange={(e) => handleUpdateStato(veicolo.id, e.target.value)}
@@ -378,7 +402,6 @@ export default function FlottaPage() {
                   </div>
                 </div>
 
-                {/* Tasti Azione: Scheda Furgone + Elimina */}
                 <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
                   <button
                     onClick={() => handleDeleteVeicolo(veicolo.id, veicolo.targa)}
@@ -402,7 +425,7 @@ export default function FlottaPage() {
         )}
       </main>
 
-      {/* 🟢 SCHEDA DETTAGLIO FURGONE (MODALE CON FOTO DOCUMENTI) */}
+      {/* 🟢 SCHEDA DETTAGLIO FURGONE CON STORICO COSTI INTEGRATO */}
       {selectedVeicolo && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 max-w-2xl w-full shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
@@ -453,7 +476,7 @@ export default function FlottaPage() {
               </div>
             </div>
 
-            {/* 📸 SEZIONE FOTO DOCUMENTI: LIBRETTO, ASSICURAZIONE, REVISIONE */}
+            {/* 📸 SEZIONE FOTO DOCUMENTI */}
             <div className="p-4 bg-white border border-gray-200 rounded-2xl space-y-3">
               <span className="text-[11px] font-extrabold text-[#1E242B] uppercase tracking-wider block">
                 Foto Documenti Furgone
@@ -609,6 +632,63 @@ export default function FlottaPage() {
                 onChange={(e) => setEditNote(e.target.value)}
                 className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl p-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#E05353]"
               />
+            </div>
+
+            {/* ========================================== */}
+            {/* 💶 NUOVA SEZIONE: STORICO COSTI & FATTURE COLLEGATE */}
+            {/* ========================================== */}
+            <div className="p-4 bg-[#F8F9FB] border border-gray-200 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg">
+                    <Receipt className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-xs text-[#1E242B] uppercase">Storico Costi & Manutenzioni</h4>
+                    <p className="text-[10px] text-gray-400">Totale investito su questo furgone</p>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-xs font-black text-emerald-700">
+                    € {totaleCostiMezzo.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              {loadingSpese ? (
+                <div className="py-4 text-center text-xs text-gray-400">Caricamento spese...</div>
+              ) : speseMezzo.length === 0 ? (
+                <div className="py-4 text-center text-xs text-gray-400 bg-white rounded-xl border border-dashed border-gray-200">
+                  Nessuna spesa o fattura registrata per questo mezzo.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  {speseMezzo.map((s) => (
+                    <div key={s.id} className="bg-white border border-gray-200 rounded-xl p-3 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-[#1E242B]">€ {Number(s.importo).toLocaleString('it-IT', { minimumFractionDigits: 2 })}</span>
+                          <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-bold text-[10px]">{s.tipo_spesa}</span>
+                        </div>
+                        <p className="text-gray-500 text-[11px] mt-0.5">{s.descrizione || 'Intervento'}</p>
+                        <span className="text-[10px] text-gray-400">{s.data_spesa}</span>
+                      </div>
+
+                      {s.fattura_url && (
+                        <a
+                          href={s.fattura_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition text-[10px]"
+                        >
+                          <ExternalLink className="w-3 h-3 text-[#E05353]" /> Vedi
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Tasto Salva Modifiche Scheda */}
