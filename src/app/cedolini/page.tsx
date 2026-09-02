@@ -20,7 +20,8 @@ import {
   Clock,
   Eye,
   Send,
-  Users
+  Users,
+  Trash2
 } from 'lucide-react';
 
 export default function AdminCedoliniPage() {
@@ -108,10 +109,9 @@ export default function AdminCedoliniPage() {
 
       if (dbError) throw dbError;
 
-      // Pulisci il file per quell'autista
       setFilePerAutista({ ...filePerAutista, [autista.id]: null });
       fetchData();
-      alert(`Busta paga caricata con successo per ${nomeCompleto}! L'autista può ora firmarla dall'app.`);
+      alert(`Busta paga caricata con successo per ${nomeCompleto}!`);
     } catch (err: any) {
       alert(`Errore durante il caricamento: ${err.message}`);
     } finally {
@@ -119,11 +119,28 @@ export default function AdminCedoliniPage() {
     }
   };
 
+  const handleEliminaCedolino = async (id: string, riferimento: string) => {
+    const conferma = window.confirm(`Sei sicuro di voler eliminare il cedolino "${riferimento}"? L'operazione è irreversibile.`);
+    if (!conferma) return;
+
+    try {
+      const { error } = await supabase
+        .from('cedolini')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      setCedolini(cedolini.filter(c => c.id !== id));
+      alert('Cedolino eliminato con successo.');
+    } catch (err: any) {
+      alert(`Errore eliminazione: ${err.message}`);
+    }
+  };
+
   const cedoliniFiltrati = cedolini.filter(c => filtroMese === 'TUTTI' || c.mese === filtroMese);
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] pb-20 antialiased font-sans">
-      {/* Header Admin */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-30 px-4 py-3 sm:px-8">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -140,21 +157,19 @@ export default function AdminCedoliniPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={fetchData}
-              className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
-              title="Aggiorna"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
-            </button>
-          </div>
+          <button 
+            onClick={fetchData}
+            className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
+            title="Aggiorna"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
+          </button>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-8 pt-6 space-y-6">
         
-        {/* SEZIONE 1: CARICAMENTO RAPIDO PER CIASCUN AUTISTA */}
+        {/* SEZIONE 1: CARICAMENTO RAPIDO */}
         <section className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
             <div className="flex items-center gap-2.5">
@@ -167,7 +182,6 @@ export default function AdminCedoliniPage() {
               </div>
             </div>
 
-            {/* Selettori Mese e Anno Globali per il caricamento */}
             <div className="flex items-center gap-2">
               <select
                 value={MeseSelezionato}
@@ -211,26 +225,36 @@ export default function AdminCedoliniPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <label className={`cursor-pointer px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition border ${
-                        fileSelezionato 
-                          ? 'bg-emerald-50 border-emerald-300 text-emerald-800' 
-                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'
-                      }`}>
-                        <input
-                          type="file"
-                          accept="application/pdf"
-                          className="hidden"
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files[0]) {
-                              setFilePerAutista({ ...filePerAutista, [autista.id]: e.target.files[0] });
-                            }
-                          }}
-                        />
-                        <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />
-                        <span className="truncate max-w-[150px]">
-                          {fileSelezionato ? fileSelezionato.name : 'Seleziona PDF'}
-                        </span>
-                      </label>
+                      {/* Box selezione file con tasto X se già selezionato */}
+                      <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        <label className="cursor-pointer px-3 py-2 text-xs font-bold flex items-center gap-1.5 hover:bg-gray-50 transition">
+                          <input
+                            type="file"
+                            accept="application/pdf"
+                            className="hidden"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                setFilePerAutista({ ...filePerAutista, [autista.id]: e.target.files[0] });
+                              }
+                            }}
+                          />
+                          <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="truncate max-w-[130px]">
+                            {fileSelezionato ? fileSelezionato.name : 'Seleziona PDF'}
+                          </span>
+                        </label>
+
+                        {fileSelezionato && (
+                          <button
+                            type="button"
+                            onClick={() => setFilePerAutista({ ...filePerAutista, [autista.id]: null })}
+                            className="px-2 py-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition border-l border-gray-100"
+                            title="Rimuovi file selezionato"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
 
                       <button
                         type="button"
@@ -258,14 +282,13 @@ export default function AdminCedoliniPage() {
           )}
         </section>
 
-        {/* SEZIONE 2: REGISTRO STORICO E FIRME */}
+        {/* SEZIONE 2: STORICO E FIRME CON ELIMINAZIONE */}
         <div className="space-y-3">
           <div className="flex items-center justify-between px-2">
             <h3 className="font-extrabold text-xs text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
               <Filter className="w-3.5 h-3.5" /> Storico Cedolini & Verifiche Firme
             </h3>
 
-            {/* Filtro Mese */}
             <div className="flex items-center gap-1 overflow-x-auto">
               {['TUTTI', 'Settembre', 'Ottobre', 'Agosto', 'Luglio'].map((m) => (
                 <button
@@ -348,6 +371,15 @@ export default function AdminCedoliniPage() {
                       <Eye className="w-4 h-4" /> Vedi Firma
                     </button>
                   )}
+
+                  {/* Pulsante Elimina Cedolino */}
+                  <button
+                    onClick={() => handleEliminaCedolino(item.id, `${item.autista_nome} (${item.mese} ${item.anno})`)}
+                    className="p-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-2xl transition"
+                    title="Elimina cedolino"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ))
@@ -355,7 +387,7 @@ export default function AdminCedoliniPage() {
         </div>
       </main>
 
-      {/* MODALE VISUALIZZAZIONE FIRMA CEDOLINO */}
+      {/* MODALE VISUALIZZAZIONE FIRMA */}
       {cedolinoSelezionato && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4">
