@@ -15,11 +15,10 @@ import {
   Filter,
   Sparkles,
   CheckCircle2,
-  TrendingUp,
   BarChart3,
-  Calendar,
-  AlertCircle,
-  Trash2
+  Trash2,
+  FileSpreadsheet,
+  Layers
 } from 'lucide-react';
 
 export default function GestioneSpesePage() {
@@ -43,7 +42,7 @@ export default function GestioneSpesePage() {
   const [dkvExtractedItems, setDkvExtractedItems] = useState<any[]>([]);
   const [savingDkv, setSavingDkv] = useState(false);
 
-  // Filtro
+  // Filtro Storico
   const [filtroTarga, setFiltroTarga] = useState('TUTTI');
 
   useEffect(() => {
@@ -128,7 +127,6 @@ export default function GestioneSpesePage() {
     }
   };
 
-  // Funzione per eliminare una spesa / fattura registrata
   const handleEliminaSpesa = async (id: string) => {
     const conferma = window.confirm("Sei sicuro di voler eliminare questa spesa/fattura? L'operazione è irreversibile.");
     if (!conferma) return;
@@ -148,7 +146,6 @@ export default function GestioneSpesePage() {
     }
   };
 
-  // Funzione Lettura IA DKV
   const handleAnalyzeDkv = async () => {
     if (!dkvFile) {
       alert('Seleziona il file PDF o immagine della fattura DKV.');
@@ -182,7 +179,6 @@ export default function GestioneSpesePage() {
     }
   };
 
-  // Conferma e Inserimento automatico su Supabase per ogni mezzo
   const handleSaveAllDkvExpenses = async () => {
     if (dkvExtractedItems.length === 0) return;
     setSavingDkv(true);
@@ -226,7 +222,6 @@ export default function GestioneSpesePage() {
   const speseFiltrate = spese.filter(s => filtroTarga === 'TUTTI' || s.targa === filtroTarga);
   const totaleSpese = speseFiltrate.reduce((acc, curr) => acc + Number(curr.importo || 0), 0);
 
-  // Calcolo Andamento Costi Mensili per il Grafico
   const chartData = useMemo(() => {
     const monthsMap: { [key: string]: number } = {};
     speseFiltrate.forEach((s) => {
@@ -246,9 +241,9 @@ export default function GestioneSpesePage() {
 
   return (
     <div className="min-h-screen bg-[#0F172A] text-white p-4 md:p-8 antialiased">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* Header */}
+        {/* Header Principale */}
         <div className="flex flex-col md:flex-row justify-between md:items-center pb-4 border-b border-slate-800 gap-4">
           <div className="flex items-center gap-4">
             <Link href="/" className="p-3 bg-slate-800 hover:bg-slate-700 rounded-2xl transition">
@@ -259,7 +254,7 @@ export default function GestioneSpesePage() {
                 <Receipt className="w-7 h-7 text-red-500" />
                 Registro Spese & Fatture Flotta
               </h1>
-              <p className="text-xs text-slate-400 mt-0.5">Analisi costi, andamento contabile e ripartizione automatica DKV</p>
+              <p className="text-xs text-slate-400 mt-0.5">Controllo contabile, inserimento documenti e ripartizione automatica DKV</p>
             </div>
           </div>
 
@@ -304,190 +299,202 @@ export default function GestioneSpesePage() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Form Inserimento Fattura Singola */}
-          <div className="bg-[#1E293B] border border-slate-700/70 rounded-3xl p-6 shadow-xl space-y-4">
-            <h2 className="font-bold text-base flex items-center gap-2 text-white">
-              <Plus className="w-5 h-5 text-red-500" />
-              Nuova Spesa Singola
-            </h2>
+        {/* ========================================== */}
+        {/* SEZIONE 1: NUOVA REGISTRAZIONE SPESA (STACCATA) */}
+        {/* ========================================== */}
+        <section className="bg-[#1E293B] border-2 border-red-500/30 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
+          <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
+            <div className="w-10 h-10 rounded-2xl bg-red-600/20 text-red-400 flex items-center justify-center font-bold">
+              <Plus className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-white">Nuova Registrazione Spesa o Fattura</h2>
+              <p className="text-xs text-slate-400">Compila i campi sottostanti per registrare un costo di manutenzione o carburante su un furgone</p>
+            </div>
+          </div>
 
-            <form onSubmit={handleSalvaSpesa} className="space-y-3">
+          <form onSubmit={handleSalvaSpesa} className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Seleziona Veicolo (Targa)</label>
+              <select
+                value={targaSelezionata}
+                onChange={(e) => setTargaSelezionata(e.target.value)}
+                className="w-full bg-[#0F172A] border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-red-500 font-bold"
+                required
+              >
+                {veicoli.map((v) => (
+                  <option key={v.targa} value={v.targa}>
+                    {v.targa} - {v.modello || 'Furgone'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Tipologia Intervento</label>
+              <select
+                value={tipoSpesa}
+                onChange={(e) => setTipoSpesa(e.target.value)}
+                className="w-full bg-[#0F172A] border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-red-500 font-bold"
+              >
+                <option value="Tagliando">Tagliando & Filtri</option>
+                <option value="Gomme">Gomme / Pneumatici</option>
+                <option value="Meccanica">Riparazione Meccanica</option>
+                <option value="Carrozzeria">Carrozzeria & Cristalli</option>
+                <option value="Carburante">Carburante Straordinario</option>
+                <option value="Revisione">Revisione Ministeriale</option>
+                <option value="Altro">Altra Spesa</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-400 mb-1">Veicolo</label>
-                <select
-                  value={targaSelezionata}
-                  onChange={(e) => setTargaSelezionata(e.target.value)}
-                  className="w-full bg-[#0F172A] border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-red-500"
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Importo (€)</label>
+                <input
+                  type="number"
+                  step="0.01"
                   required
-                >
-                  {veicoli.map((v) => (
-                    <option key={v.targa} value={v.targa}>
-                      {v.targa} - {v.modello || 'Furgone'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-400 mb-1">Tipologia</label>
-                <select
-                  value={tipoSpesa}
-                  onChange={(e) => setTipoSpesa(e.target.value)}
-                  className="w-full bg-[#0F172A] border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-red-500"
-                >
-                  <option value="Tagliando">Tagliando & Filtri</option>
-                  <option value="Gomme">Gomme / Pneumatici</option>
-                  <option value="Meccanica">Riparazione Meccanica</option>
-                  <option value="Carrozzeria">Carrozzeria & Cristalli</option>
-                  <option value="Carburante">Carburante Straordinario</option>
-                  <option value="Revisione">Revisione Ministeriale</option>
-                  <option value="Altro">Altra Spesa</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 mb-1">Importo (€)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="250.00"
-                    value={importo}
-                    onChange={(e) => setImporto(e.target.value)}
-                    className="w-full bg-[#0F172A] border border-slate-700 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 mb-1">Data</label>
-                  <input
-                    type="date"
-                    required
-                    value={dataSpesa}
-                    onChange={(e) => setDataSpesa(e.target.value)}
-                    className="w-full bg-[#0F172A] border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-red-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-400 mb-1">Descrizione Intervento</label>
-                <textarea
-                  rows={2}
-                  placeholder="Dettaglio pezzi o note..."
-                  value={descrizione}
-                  onChange={(e) => setDescrizione(e.target.value)}
-                  className="w-full bg-[#0F172A] border border-slate-700 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500"
+                  placeholder="250.00"
+                  value={importo}
+                  onChange={(e) => setImporto(e.target.value)}
+                  className="w-full bg-[#0F172A] border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500 font-bold"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-400 mb-1">Allegato (PDF / Foto)</label>
-                <div className="border border-dashed border-slate-700 rounded-xl p-3 text-center cursor-pointer relative bg-[#0F172A] hover:border-slate-500 transition">
-                  <input
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={(e) => setFileFattura(e.target.files?.[0] || null)}
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                  />
-                  <UploadCloud className="w-5 h-5 text-red-400 mx-auto mb-1" />
-                  <span className="text-[11px] text-slate-300">
-                    {fileFattura ? fileFattura.name : 'Seleziona fattura / ricevuta'}
-                  </span>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={uploading}
-                className="w-full mt-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 rounded-xl transition flex items-center justify-center gap-2 text-xs shadow-lg shadow-red-600/30 disabled:opacity-50"
-              >
-                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                Registra Spesa
-              </button>
-            </form>
-          </div>
-
-          {/* Elenco & Filtro Spese con Tasto Elimina */}
-          <div className="lg:col-span-2 bg-[#1E293B] border border-slate-700/70 rounded-3xl p-6 shadow-xl space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-              <h2 className="font-bold text-base flex items-center gap-2 text-white">
-                <Euro className="w-5 h-5 text-emerald-400" />
-                Elenco Documenti & Fatture
-              </h2>
-
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-slate-400" />
-                <select
-                  value={filtroTarga}
-                  onChange={(e) => setFiltroTarga(e.target.value)}
-                  className="bg-[#0F172A] border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-red-500"
-                >
-                  <option value="TUTTI">Tutti i Veicoli</option>
-                  {veicoli.map((v) => (
-                    <option key={v.targa} value={v.targa}>
-                      {v.targa}
-                    </option>
-                  ))}
-                </select>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Data</label>
+                <input
+                  type="date"
+                  required
+                  value={dataSpesa}
+                  onChange={(e) => setDataSpesa(e.target.value)}
+                  className="w-full bg-[#0F172A] border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-red-500 font-bold"
+                />
               </div>
             </div>
 
-            {loading ? (
-              <div className="py-12 text-center text-xs text-slate-400">Caricamento registro spese...</div>
-            ) : speseFiltrate.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-400 border border-slate-800 rounded-2xl bg-[#0F172A]">
-                Nessuna fattura presente.
+            <div className="md:col-span-2">
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Descrizione Dettagliata</label>
+              <input
+                type="text"
+                placeholder="es. Sostituzione pastiglie freni anteriori e dischi..."
+                value={descrizione}
+                onChange={(e) => setDescrizione(e.target.value)}
+                className="w-full bg-[#0F172A] border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Allegato Fattura (PDF / Foto)</label>
+              <div className="border border-dashed border-slate-700 rounded-xl p-2.5 text-center cursor-pointer relative bg-[#0F172A] hover:border-slate-500 transition">
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(e) => setFileFattura(e.target.files?.[0] || null)}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                />
+                <span className="text-[11px] text-slate-300 truncate block">
+                  {fileFattura ? fileFattura.name : '📁 Scegli file...'}
+                </span>
               </div>
-            ) : (
-              <div className="space-y-3 max-h-[550px] overflow-y-auto pr-1">
-                {speseFiltrate.map((s) => (
-                  <div key={s.id} className="bg-[#0F172A] border border-slate-700/60 rounded-2xl p-4 flex items-center justify-between text-xs">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-white text-base">€ {Number(s.importo).toLocaleString('it-IT', { minimumFractionDigits: 2 })}</span>
-                        <Link href={`/flotta/${s.targa}`} className="bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md font-bold text-[10px] transition">
-                          {s.targa}
-                        </Link>
-                        <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md font-medium text-[10px]">
-                          {s.tipo_spesa}
-                        </span>
-                      </div>
-                      <p className="text-slate-300 text-xs">{s.descrizione || 'Nessuna descrizione'}</p>
-                      <span className="text-[10px] text-slate-500 block">{s.data_spesa}</span>
-                    </div>
+            </div>
 
-                    <div className="flex items-center gap-2">
-                      {s.fattura_url && (
-                        <a
-                          href={s.fattura_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition text-xs"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5 text-red-400" />
-                          Vedi Fattura
-                        </a>
-                      )}
+            <div className="md:col-span-3 pt-2">
+              <button
+                type="submit"
+                disabled={uploading}
+                className="w-full md:w-auto px-8 bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl transition flex items-center justify-center gap-2 text-xs shadow-lg shadow-red-600/30 disabled:opacity-50"
+              >
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                Registra Nuova Spesa nel Registro
+              </button>
+            </div>
+          </form>
+        </section>
 
-                      {/* Pulsante Elimina Spesa */}
-                      <button
-                        onClick={() => handleEliminaSpesa(s.id)}
-                        className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl transition"
-                        title="Elimina spesa"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+
+        {/* ========================================== */}
+        {/* SEZIONE 2: STORICO FATTURE & REGISTRO (STACCATA) */}
+        {/* ========================================== */}
+        <section className="bg-[#1E293B] border border-slate-700/70 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 pb-4 border-b border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                <Euro className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-black text-white">Storico Fatture & Registro Costi</h2>
+                <p className="text-xs text-slate-400">Elenco completo di tutte le spese registrate per veicolo</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-slate-400" />
+              <select
+                value={filtroTarga}
+                onChange={(e) => setFiltroTarga(e.target.value)}
+                className="bg-[#0F172A] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500 font-bold"
+              >
+                <option value="TUTTI">Tutti i Veicoli (Flotta)</option>
+                {veicoli.map((v) => (
+                  <option key={v.targa} value={v.targa}>
+                    {v.targa}
+                  </option>
                 ))}
-              </div>
-            )}
+              </select>
+            </div>
           </div>
-        </div>
+
+          {loading ? (
+            <div className="py-16 text-center text-xs text-slate-400">Caricamento storico spese...</div>
+          ) : speseFiltrate.length === 0 ? (
+            <div className="py-16 text-center text-xs text-slate-400 border border-slate-800 rounded-2xl bg-[#0F172A]">
+              Nessuna fattura presente per il filtro selezionato.
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+              {speseFiltrate.map((s) => (
+                <div key={s.id} className="bg-[#0F172A] border border-slate-700/60 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span className="font-black text-white text-base">€ {Number(s.importo).toLocaleString('it-IT', { minimumFractionDigits: 2 })}</span>
+                      <span className="bg-red-600/20 text-red-400 border border-red-500/30 px-2.5 py-0.5 rounded-md font-bold text-xs">
+                        {s.targa}
+                      </span>
+                      <span className="bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-md font-medium text-xs">
+                        {s.tipo_spesa}
+                      </span>
+                    </div>
+                    <p className="text-slate-300 text-xs">{s.descrizione || 'Nessuna descrizione'}</p>
+                    <span className="text-[10px] text-slate-500">{s.data_spesa}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-center">
+                    {s.fattura_url && (
+                      <a
+                        href={s.fattura_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition text-xs"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 text-red-400" />
+                        Vedi Fattura
+                      </a>
+                    )}
+
+                    <button
+                      onClick={() => handleEliminaSpesa(s.id)}
+                      className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl transition"
+                      title="Elimina spesa"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
 
       {/* MODALE IMPORT FATTURA MENSILE DKV CON IA */}
@@ -507,7 +514,6 @@ export default function GestioneSpesePage() {
               </button>
             </div>
 
-            {/* Step 1: Caricamento File */}
             <div className="space-y-3">
               <label className="block text-xs font-semibold text-slate-300">Carica PDF Fattura / Estratto Conto DKV</label>
               <div className="border border-dashed border-slate-700 rounded-2xl p-6 text-center cursor-pointer bg-[#0F172A] hover:border-amber-500 transition relative">
@@ -521,7 +527,6 @@ export default function GestioneSpesePage() {
                 <span className="text-xs font-semibold text-white block">
                   {dkvFile ? dkvFile.name : 'Trascina o tocca per allegare la fattura DKV'}
                 </span>
-                <span className="text-[10px] text-slate-500">Formati supportati: PDF, PNG, JPG</span>
               </div>
 
               <button
@@ -533,7 +538,7 @@ export default function GestioneSpesePage() {
                 {analyzingDkv ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Scansione e ripartizione targhe con IA in corso...</span>
+                    <span>Scansione targhe con IA in corso...</span>
                   </>
                 ) : (
                   <>
@@ -544,13 +549,12 @@ export default function GestioneSpesePage() {
               </button>
             </div>
 
-            {/* Step 2: Tabella di Controllo Risultati Estratti */}
             {dkvExtractedItems.length > 0 && (
               <div className="space-y-3 pt-3 border-t border-slate-800">
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold text-xs text-white">Voci Riconosciute ({dkvExtractedItems.length})</h4>
                   <span className="text-xs text-emerald-400 font-bold">
-                    Totale Ripartito: € {dkvExtractedItems.reduce((a, b) => a + Number(b.importo || 0), 0).toFixed(2)}
+                    Totale: € {dkvExtractedItems.reduce((a, b) => a + Number(b.importo || 0), 0).toFixed(2)}
                   </span>
                 </div>
 
@@ -560,7 +564,6 @@ export default function GestioneSpesePage() {
                       <div>
                         <span className="font-black text-amber-400 mr-2">{item.targa}</span>
                         <span className="text-slate-300">{item.descrizione}</span>
-                        <span className="text-[10px] text-slate-500 block">{item.data_spesa}</span>
                       </div>
                       <span className="font-bold text-white">€ {Number(item.importo).toFixed(2)}</span>
                     </div>
