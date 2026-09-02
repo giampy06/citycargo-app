@@ -10,12 +10,12 @@ import {
   FileText, 
   CheckCircle2, 
   Clock, 
-  AlertCircle, 
+  Calendar as CalendarIcon, 
   Loader2, 
   FileSignature, 
   ShieldCheck,
-  ChevronRight,
-  X
+  X,
+  Gauge
 } from 'lucide-react';
 
 export default function AppAutistaDashboard() {
@@ -23,6 +23,7 @@ export default function AppAutistaDashboard() {
   const [loading, setLoading] = useState(true);
   const [autista, setAutista] = useState<any | null>(null);
   const [turnoAttivo, setTurnoAttivo] = useState<any | null>(null);
+  const [mieiTurni, setMieiTurni] = useState<any[]>([]);
   const [documenti, setDocumenti] = useState<any[]>([]);
 
   // Modale Firma Digitale
@@ -57,6 +58,15 @@ export default function AppAutistaDashboard() {
         .maybeSingle();
 
       setTurnoAttivo(turnoData);
+
+      // Recupera storico turni dell'autista
+      const { data: turniData } = await supabase
+        .from('turni_presenze')
+        .select('*')
+        .eq('autista_id', session.user.id)
+        .order('created_at', { ascending: false });
+
+      setMieiTurni(turniData || []);
 
       // Recupera documenti aziendali inviati all'autista
       if (autistaData) {
@@ -173,7 +183,6 @@ export default function AppAutistaDashboard() {
       </header>
 
       <main className="max-w-md mx-auto p-4 space-y-5">
-        {/* Stato Approvazione / Blocco */}
         {autista?.stato !== 'attivo' ? (
           <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 text-center space-y-3">
             <Clock className="w-8 h-8 text-amber-600 mx-auto animate-pulse" />
@@ -230,7 +239,7 @@ export default function AppAutistaDashboard() {
               </div>
 
               {documenti.length === 0 ? (
-                <div className="py-6 text-center text-xs text-gray-400">
+                <div className="py-4 text-center text-xs text-gray-400">
                   Nessun documento o circolare ricevuta al momento.
                 </div>
               ) : (
@@ -261,6 +270,46 @@ export default function AppAutistaDashboard() {
                             <FileSignature className="w-3.5 h-3.5" /> Firma
                           </button>
                         )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* STORICO TURNI & PRESENZE */}
+            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-sm flex items-center gap-2">
+                  <CalendarIcon className="w-4 h-4 text-gray-600" /> Storico Turni Effettuati
+                </h3>
+                <span className="text-xs text-gray-400 font-bold">{mieiTurni.length} turni</span>
+              </div>
+
+              {mieiTurni.length === 0 ? (
+                <div className="py-6 text-center text-xs text-gray-400">
+                  Non hai ancora registrato alcun turno.
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {mieiTurni.map((t) => (
+                    <div key={t.id} className="p-3.5 bg-[#F8F9FB] rounded-2xl flex items-center justify-between text-xs">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-[#1E242B]">{t.targa_mezzo}</span>
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                            t.stato === 'chiuso' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                          }`}>
+                            {t.stato}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(t.created_at).toLocaleDateString('it-IT')} • {t.appalto || 'CITI'}
+                        </span>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="font-black text-[#E05353]">{t.km_percorsi ? `${t.km_percorsi} km` : 'In corso'}</span>
                       </div>
                     </div>
                   ))}
