@@ -17,7 +17,8 @@ import {
   UploadCloud,
   FileCheck,
   Filter,
-  Clock
+  Clock,
+  Eye
 } from 'lucide-react';
 
 export default function AdminCedoliniPage() {
@@ -28,10 +29,13 @@ export default function AdminCedoliniPage() {
 
   const [filtroMese, setFiltroMese] = useState<string>('TUTTI');
 
-  // Modale Admin
+  // Modale Caricamento
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+
+  // Modale Visualizzazione Firma
+  const [cedolinoSelezionato, setCedolinoSelezionato] = useState<any | null>(null);
 
   const [autistaSelezionato, setAutistaSelezionato] = useState('');
   const [mese, setMese] = useState('Settembre');
@@ -52,7 +56,6 @@ export default function AdminCedoliniPage() {
       setCedolini(resCedolini.data || []);
       setAutisti(resAutisti.data || []);
       
-      // Imposta il primo autista come default se la lista non è vuota
       if (resAutisti.data && resAutisti.data.length > 0 && !autistaSelezionato) {
         setAutistaSelezionato(resAutisti.data[0].id);
       }
@@ -84,7 +87,6 @@ export default function AdminCedoliniPage() {
     setSubmitting(true);
 
     try {
-      // Recupera il nome dell'autista per il nome del file e per il DB
       const targetAutista = autisti.find(a => a.id === autistaSelezionato);
       const nomeCompleto = targetAutista ? `${targetAutista.cognome} ${targetAutista.nome}` : 'Sconosciuto';
 
@@ -113,7 +115,7 @@ export default function AdminCedoliniPage() {
             autista_nome: nomeCompleto,
             mese: mese,
             anno: Number(anno),
-            mese_riferimento: `${mese} ${anno}`, // Necessario per l'app autisti
+            mese_riferimento: `${mese} ${anno}`,
             file_url: publicUrlData.publicUrl,
             firmato: false,
           },
@@ -179,7 +181,7 @@ export default function AdminCedoliniPage() {
           <div>
             <h2 className="font-bold text-sm text-[#1E242B]">Registro Notifiche e Ricevute</h2>
             <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-              Carica i cedolini per ciascun dipendente. L'autista riceve il documento sulla propria app ed esegue la firma telematica con data certa e codice protocollo (L. 4/1953).
+              Carica i cedolini per ciascun dipendente. L'autista riceve il documento sulla propria app ed esegue la firma telematica con data certa.
             </p>
           </div>
         </div>
@@ -241,11 +243,9 @@ export default function AdminCedoliniPage() {
 
                     <div className="text-xs text-gray-400 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                       {item.firmato ? (
-                        <>
-                          <span className="font-semibold text-emerald-700">
-                            Firmato il {new Date(item.data_firma).toLocaleString('it-IT')}
-                          </span>
-                        </>
+                        <span className="font-semibold text-emerald-700 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Firmato il {item.data_firma ? new Date(item.data_firma).toLocaleDateString('it-IT') : 'Data non disp.'}
+                        </span>
                       ) : (
                         <span className="text-amber-600 font-semibold flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5" /> In attesa che l'autista firmi per ricevuta
@@ -269,9 +269,21 @@ export default function AdminCedoliniPage() {
                   )}
 
                   {item.firmato ? (
-                    <div className="py-2.5 px-4 bg-emerald-50 text-emerald-800 rounded-2xl font-bold text-xs flex items-center gap-1.5 border border-emerald-100">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      Firmato
+                    <div className="flex items-center gap-2">
+                      <div className="py-2.5 px-4 bg-emerald-50 text-emerald-800 rounded-2xl font-bold text-xs flex items-center gap-1.5 border border-emerald-100">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        Firmato
+                      </div>
+                      
+                      {/* BOTTONE VEDI FIRMA (Aggiunto!) */}
+                      {item.firma_url && (
+                        <button
+                          onClick={() => setCedolinoSelezionato(item)}
+                          className="py-2.5 px-3.5 bg-[#1E242B] hover:bg-black text-white rounded-2xl font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
+                        >
+                          <Eye className="w-4 h-4" /> Vedi
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div className="py-2.5 px-4 bg-amber-50 text-amber-800 rounded-2xl font-bold text-xs flex items-center gap-1.5 border border-amber-200">
@@ -402,6 +414,63 @@ export default function AdminCedoliniPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODALE VISUALIZZAZIONE FIRMA CEDOLINO */}
+      {cedolinoSelezionato && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="font-extrabold text-sm text-[#1E242B]">Certificato di Firma</h3>
+                <p className="text-[10px] text-gray-400 font-medium">Ricevuta Busta Paga</p>
+              </div>
+              <button 
+                onClick={() => setCedolinoSelezionato(null)} 
+                className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-xs">
+                <div className="flex justify-between mb-1">
+                  <span className="text-gray-500 font-bold">Lavoratore:</span>
+                  <span className="text-[#1E242B] font-extrabold text-right uppercase">{cedolinoSelezionato.autista_nome}</span>
+                </div>
+                <div className="flex justify-between mb-1">
+                  <span className="text-gray-500 font-bold">Riferimento:</span>
+                  <span className="text-[#E05353] font-extrabold">{cedolinoSelezionato.mese} {cedolinoSelezionato.anno}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500 font-bold">Data/Ora (Timestamp):</span>
+                  <span className="text-[#1E242B] font-mono font-bold text-[10px]">
+                    {cedolinoSelezionato.data_firma ? new Date(cedolinoSelezionato.data_firma).toLocaleString('it-IT') : 'N/D'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider pl-1">Tratto Grafico (Canvas)</span>
+                <div className="border-2 border-dashed border-gray-200 rounded-2xl bg-white flex items-center justify-center h-32 overflow-hidden shadow-inner">
+                  <img 
+                    src={cedolinoSelezionato.firma_url} 
+                    alt="Firma autista" 
+                    className="max-h-full max-w-full object-contain mix-blend-multiply"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setCedolinoSelezionato(null)}
+              className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl font-extrabold text-xs uppercase tracking-wider transition-colors"
+            >
+              Chiudi
+            </button>
           </div>
         </div>
       )}
