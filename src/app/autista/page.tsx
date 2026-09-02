@@ -16,7 +16,9 @@ import {
   ShieldCheck,
   X,
   Banknote,
-  Download
+  Download,
+  ChevronRight,
+  Euro
 } from 'lucide-react';
 
 export default function AppAutistaDashboard() {
@@ -33,6 +35,11 @@ export default function AppAutistaDashboard() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [signing, setSigning] = useState(false);
+
+  // Calcolo Compenso (Es. 0.15€ al km)
+  const TARIFFA_KM = 0.15;
+  const kmTotali = mieiTurni.reduce((acc, t) => acc + (Number(t.km_percorsi) || 0), 0);
+  const compensoStimato = kmTotali * TARIFFA_KM;
 
   useEffect(() => {
     async function initAuthAndData() {
@@ -80,7 +87,7 @@ export default function AppAutistaDashboard() {
 
         setDocumenti(docData || []);
 
-        // 5. Recupera Buste Paga / Cedolini (ignora eventuali errori se la tabella è vuota)
+        // 5. Recupera Buste Paga / Cedolini
         try {
           const { data: cedoliniData } = await supabase
             .from('cedolini')
@@ -207,6 +214,18 @@ export default function AppAutistaDashboard() {
           </div>
         ) : (
           <>
+            {/* BOX COMPENSO MATURATO */}
+            <div className="bg-[#1E242B] text-white rounded-3xl p-6 shadow-xl shadow-black/10 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Compenso Maturato Stimato</span>
+                <div className="text-2xl font-black mt-1">€ {compensoStimato.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</div>
+                <div className="text-[10px] text-gray-400 mt-0.5">Basato su {kmTotali} km percorsi</div>
+              </div>
+              <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+                <Euro className="w-6 h-6 text-emerald-400" />
+              </div>
+            </div>
+
             {/* BOX 1: GESTIONE TURNO */}
             <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
@@ -241,133 +260,73 @@ export default function AppAutistaDashboard() {
               )}
             </div>
 
-            {/* BOX 2: CIRCOLARI E DOCUMENTI */}
-            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-black text-sm flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-[#E05353]" /> Circolari & Documenti
-                </h3>
-                <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 rounded-full text-gray-600">
-                  {documenti.filter(d => !d.firmato).length} da firmare
-                </span>
+            {/* WIDGET BUSTE PAGA (CLICCABILE) */}
+            <button
+              onClick={() => router.push('/autista/cedolini')}
+              className="w-full bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex items-center justify-between hover:border-emerald-200 hover:shadow-md transition group text-left"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Banknote className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-[#1E242B]">Buste Paga</h3>
+                  <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                    {cedolini.filter(c => !c.firmato).length > 0 ? (
+                      <span className="text-amber-600 font-bold">⚠️ {cedolini.filter(c => !c.firmato).length} da firmare</span>
+                    ) : (
+                      <span>{cedolini.length} cedolini archiviati</span>
+                    )}
+                  </p>
+                </div>
               </div>
+              <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-emerald-500 transition-colors" />
+            </button>
 
-              {documenti.length === 0 ? (
-                <div className="py-4 text-center text-xs text-gray-400">
-                  Nessun documento o circolare ricevuta al momento.
+            {/* WIDGET CIRCOLARI & DOCUMENTI (CLICCABILE) */}
+            <button
+              onClick={() => router.push('/autista/documenti')}
+              className="w-full bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex items-center justify-between hover:border-amber-200 hover:shadow-md transition group text-left"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <FileText className="w-6 h-6 text-amber-600" />
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {documenti.map((doc) => (
-                    <div 
-                      key={doc.id}
-                      className="p-4 bg-[#F8F9FB] rounded-2xl border border-gray-100 flex items-center justify-between gap-3"
-                    >
-                      <div className="space-y-1 overflow-hidden">
-                        <h4 className="font-extrabold text-xs text-[#1E242B] truncate">{doc.titolo}</h4>
-                        <p className="text-[11px] text-gray-500 truncate">{doc.descrizione || 'Prendi visione e firma'}</p>
-                      </div>
-                      <div className="flex-shrink-0">
-                        {doc.firmato ? (
-                          <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-xl flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Firmato
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => setDocDaFirmare(doc)}
-                            className="px-3.5 py-2 bg-[#E05353] hover:bg-[#c94545] text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1"
-                          >
-                            <FileSignature className="w-3.5 h-3.5" /> Firma
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                <div>
+                  <h3 className="font-black text-sm text-[#1E242B]">Circolari & Documenti</h3>
+                  <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                    {documenti.filter(d => !d.firmato).length > 0 ? (
+                      <span className="text-amber-600 font-bold">⚠️ {documenti.filter(d => !d.firmato).length} da firmare</span>
+                    ) : (
+                      <span>Tutti i documenti firmati</span>
+                    )}
+                  </p>
                 </div>
-              )}
-            </div>
-
-            {/* BOX 3: BUSTE PAGA / CEDOLINI */}
-            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-black text-sm flex items-center gap-2">
-                  <Banknote className="w-4 h-4 text-emerald-600" /> Buste Paga
-                </h3>
-                <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 rounded-full text-gray-600">
-                  {cedolini.length} cedolini
-                </span>
               </div>
+              <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-amber-500 transition-colors" />
+            </button>
 
-              {cedolini.length === 0 ? (
-                <div className="py-4 text-center text-xs text-gray-400">
-                  Nessuna busta paga archiviata.
+            {/* WIDGET STORICO TURNI (CLICCABILE) */}
+            <button
+              onClick={() => router.push('/autista/storico')}
+              className="w-full bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex items-center justify-between hover:border-blue-200 hover:shadow-md transition group text-left"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <CalendarIcon className="w-6 h-6 text-blue-600" />
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {cedolini.map((cedolino) => (
-                    <div key={cedolino.id} className="p-4 bg-[#F8F9FB] rounded-2xl border border-gray-100 flex items-center justify-between gap-3">
-                      <div>
-                        <h4 className="font-extrabold text-xs text-[#1E242B] uppercase">{cedolino.mese_riferimento || 'Cedolino'}</h4>
-                        <p className="text-[10px] text-gray-500">{new Date(cedolino.created_at).toLocaleDateString('it-IT')}</p>
-                      </div>
-                      <a
-                        href={cedolino.file_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="w-9 h-9 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 hover:text-emerald-600 transition"
-                      >
-                        <Download className="w-4 h-4" />
-                      </a>
-                    </div>
-                  ))}
+                <div>
+                  <h3 className="font-black text-sm text-[#1E242B]">Storico Turni</h3>
+                  <p className="text-[11px] text-gray-500 font-medium mt-0.5">{mieiTurni.length} presenze registrate</p>
                 </div>
-              )}
-            </div>
-
-            {/* BOX 4: STORICO TURNI & PRESENZE */}
-            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-black text-sm flex items-center gap-2">
-                  <CalendarIcon className="w-4 h-4 text-gray-600" /> Storico Turni Effettuati
-                </h3>
-                <span className="text-xs text-gray-400 font-bold">{mieiTurni.length} turni</span>
               </div>
-
-              {mieiTurni.length === 0 ? (
-                <div className="py-6 text-center text-xs text-gray-400">
-                  Non hai ancora registrato alcun turno.
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {mieiTurni.map((t) => (
-                    <div key={t.id} className="p-3.5 bg-[#F8F9FB] rounded-2xl flex items-center justify-between text-xs border border-gray-100">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-black text-[#1E242B]">{t.targa_mezzo}</span>
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                            t.stato === 'chiuso' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-                          }`}>
-                            {t.stato}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-gray-400">
-                          {new Date(t.created_at).toLocaleDateString('it-IT')} • {t.appalto || 'CITI'}
-                        </span>
-                      </div>
-
-                      <div className="text-right">
-                        <span className="font-black text-[#E05353]">{t.km_percorsi ? `${t.km_percorsi} km` : 'In corso'}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+              <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-blue-500 transition-colors" />
+            </button>
           </>
         )}
       </main>
 
-      {/* MODALE FIRMA DIGITALE TOUCH */}
+      {/* MODALE FIRMA DIGITALE TOUCH (Per eventuali richiami rapidi) */}
       {docDaFirmare && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4">
