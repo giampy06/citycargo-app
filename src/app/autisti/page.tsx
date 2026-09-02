@@ -18,7 +18,8 @@ import {
   X, 
   Loader2,
   Send,
-  FileCheck
+  FileCheck,
+  Megaphone
 } from 'lucide-react';
 
 export default function GestioneAutistiPage() {
@@ -34,8 +35,9 @@ export default function GestioneAutistiPage() {
   const [editCorsoSicurezza, setEditCorsoSicurezza] = useState('');
   const [savingMedica, setSavingMedica] = useState(false);
 
-  // Invio Documento da Firmare
+  // Invio Documento (Singolo o Broadcast a Tutti)
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
+  const [isBroadcastMode, setIsBroadcastMode] = useState(false);
   const [titoloDoc, setTitoloDoc] = useState('');
   const [descDoc, setDescDoc] = useState('');
   const [fileDoc, setFileDoc] = useState<File | null>(null);
@@ -116,7 +118,7 @@ export default function GestioneAutistiPage() {
 
   const handleInviaDocumentoFirma = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAutista || !fileDoc) {
+    if (!fileDoc) {
       alert('Seleziona un file da inviare.');
       return;
     }
@@ -124,27 +126,50 @@ export default function GestioneAutistiPage() {
 
     try {
       const ext = fileDoc.name.split('.').pop() || 'pdf';
-      const path = `documenti-firmati/${selectedAutista.email}/${Date.now()}.${ext}`;
+      const path = `documenti-firmati/broadcast-${Date.now()}.${ext}`;
 
       const { error: upErr } = await supabase.storage.from('documenti-veicoli').upload(path, fileDoc);
       if (upErr) throw upErr;
 
       const { data: urlData } = supabase.storage.from('documenti-veicoli').getPublicUrl(path);
 
-      const { error: dbErr } = await supabase.from('documenti_aziendali').insert([
-        {
+      if (isBroadcastMode) {
+        const autistiAttivi = autisti.filter(a => a.id);
+        if (autistiAttivi.length === 0) {
+          throw new Error('Nessun autista registrato in archivio.');
+        }
+
+        const payload = autistiAttivi.map(a => ({
           titolo: titoloDoc,
           descrizione: descDoc,
           file_url: urlData.publicUrl,
-          autista_id: selectedAutista.id,
+          autista_id: a.id,
           richiede_firma: true,
           firmato: false
-        }
-      ]);
+        }));
 
-      if (dbErr) throw dbErr;
+        const { error: dbErr } = await supabase.from('documenti_aziendali').insert(payload);
+        if (dbErr) throw dbErr;
 
-      alert('Documento inviato all\'autista per la firma digitale!');
+        alert(`Documento inviato con successo a tutti i ${autistiAttivi.length} autisti!`);
+      } else {
+        if (!selectedAutista) throw new Error('Nessun autista selezionato.');
+        
+        const { error: dbErr } = await supabase.from('documenti_aziendali').insert([
+          {
+            titolo: titoloDoc,
+            descrizione: descDoc,
+            file_url: urlData.publicUrl,
+            autista_id: selectedAutista.id,
+            richiede_firma: true,
+            firmato: false
+          }
+        ]);
+        if (dbErr) throw dbErr;
+
+        alert(`Documento inviato a ${selectedAutista.nome} per la firma digitale!`);
+      }
+
       setIsDocModalOpen(false);
       setTitoloDoc('');
       setDescDoc('');
@@ -181,11 +206,21 @@ export default function GestioneAutistiPage() {
               <p className="text-[11px] text-gray-400 font-medium">Fascicoli Dipendenti, Patenti, Visite Mediche e Firma Digitale</p>
             </div>
           </div>
+
+          <button
+            onClick={() => {
+              setIsBroadcastMode(true);
+              setSelectedAutista(null);
+              setIsDocModalOpen(true);
+            }}
+            className="px-4 py-2.5 bg-[#E05353] hover:bg-[#c94545] text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-sm transition"
+          >
+            <Megaphone className="w-4 h-4" /> Invia Circolare a Tutti
+          </button>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-8 pt-6 space-y-6">
-        {/* Ricerca e Filtri */}
         <div className="bg-white rounded-3xl p-4 border border-gray-100 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
           <div className="relative w-full sm:w-80">
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -215,7 +250,6 @@ export default function GestioneAutistiPage() {
           </div>
         </div>
 
-        {/* Tabella / Lista Autisti */}
         {loading ? (
           <div className="py-20 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-[#E05353]" />
@@ -293,7 +327,6 @@ export default function GestioneAutistiPage() {
         )}
       </main>
 
-      {/* 🟢 MODALE FASCICOLO PERSONALE & VISITE MEDICHE */}
       {selectedAutista && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 max-w-xl w-full shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
@@ -312,7 +345,6 @@ export default function GestioneAutistiPage() {
               </button>
             </div>
 
-            {/* Foto Patente e Documenti */}
             <div className="space-y-2">
               <span className="text-[11px] font-extrabold text-[#1E242B] uppercase tracking-wider block">
                 Documenti Identità & Patente
@@ -346,7 +378,6 @@ export default function GestioneAutistiPage() {
               </div>
             </div>
 
-            {/* Scadenze Sanitarie & Sicurezza */}
             <div className="p-4 bg-[#F8F9FB] rounded-2xl space-y-3">
               <span className="text-[11px] font-extrabold text-[#1E242B] uppercase tracking-wider block">
                 Scadenze Sanitarie & Formazione (D.Lgs 81/08)
@@ -384,14 +415,17 @@ export default function GestioneAutistiPage() {
               </button>
             </div>
 
-            {/* Sezione Invio Documenti per Firma Digitale */}
             <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => setIsDocModalOpen(true)}
+                onClick={() => {
+                  setIsBroadcastMode(false);
+                  setSelectedAutista(selectedAutista);
+                  setIsDocModalOpen(true);
+                }}
                 className="px-4 py-2.5 bg-[#E05353] hover:bg-[#c94545] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition shadow-sm"
               >
-                <Send className="w-4 h-4" /> Invia Documento per Firma Digitale
+                <Send className="w-4 h-4" /> Invia Documento a Questo Autista
               </button>
 
               <button
@@ -406,12 +440,16 @@ export default function GestioneAutistiPage() {
         </div>
       )}
 
-      {/* MODALE INVIO DOCUMENTO DA FIRMARE */}
       {isDocModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="font-extrabold text-sm text-[#1E242B]">Invia Documento a {selectedAutista?.nome}</h3>
+              <div>
+                <h3 className="font-extrabold text-sm text-[#1E242B]">
+                  {isBroadcastMode ? '📢 Invia a Tutti gli Autisti' : `Invia Documento a ${selectedAutista?.nome}`}
+                </h3>
+                <p className="text-[10px] text-gray-400 font-medium">Richiesta di presa visione e firma digitale</p>
+              </div>
               <button onClick={() => setIsDocModalOpen(false)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
                 <X className="w-4 h-4" />
               </button>
@@ -423,7 +461,7 @@ export default function GestioneAutistiPage() {
                 <input
                   type="text"
                   required
-                  placeholder="es. Regolamento Aziendale 2026"
+                  placeholder="es. Disposizione di Servizio 2026"
                   value={titoloDoc}
                   onChange={(e) => setTitoloDoc(e.target.value)}
                   className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 font-semibold"
@@ -458,7 +496,7 @@ export default function GestioneAutistiPage() {
                 className="w-full py-3 bg-[#E05353] hover:bg-[#c94545] text-white rounded-xl font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition"
               >
                 {sendingDoc ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                Invia all'App Conducente
+                {isBroadcastMode ? 'Invia a Tutti gli Autisti' : "Invia all'App Conducente"}
               </button>
             </form>
           </div>
