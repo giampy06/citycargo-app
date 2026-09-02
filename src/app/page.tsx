@@ -258,8 +258,9 @@ export default function AdminDashboardPage() {
       <header className="bg-white border-b border-gray-100 sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#E05353] flex items-center justify-center text-white font-extrabold text-sm tracking-wider shadow-sm">
-              CC
+            {/* LOGO PNG SOSTITUITO AL POSTO DI 'CC' */}
+            <div className="w-10 h-10 rounded-2xl overflow-hidden bg-white border border-gray-200 flex items-center justify-center shadow-sm flex-shrink-0">
+              <img src="/logo.png" alt="City Cargo Logo" className="w-full h-full object-cover" />
             </div>
             <div>
               <div className="flex items-center gap-2">
