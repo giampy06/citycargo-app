@@ -79,9 +79,13 @@ export default function AnalisiSpeseIAPage() {
     setErrorIA(null);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/analyze-expenses', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token || ''}`,
+        },
         body: JSON.stringify({ expenses: spese, vehicles: veicoli }),
       });
 

@@ -158,9 +158,13 @@ export default function GestioneSpesePage() {
       reader.readAsDataURL(dkvFile);
       reader.onload = async () => {
         const base64Data = (reader.result as string).split(',')[1];
+        const { data: { session } } = await supabase.auth.getSession();
         const res = await fetch('/api/parse-dkv', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token || ''}`,
+          },
           body: JSON.stringify({
             fileBase64: base64Data,
             mimeType: dkvFile.type || 'application/pdf',

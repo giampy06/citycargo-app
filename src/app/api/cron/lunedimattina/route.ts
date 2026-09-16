@@ -1,12 +1,26 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/supabase';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // Protezione: solo Vercel Cron (o chi conosce il CRON_SECRET) può eseguire questo endpoint.
+  // Senza questo controllo, chiunque trovi l'URL potrebbe invocarlo manualmente a piacimento.
+  const authHeader = req.headers.get('authorization');
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ success: false, error: 'Non autorizzato.' }, { status: 401 });
+  }
+
   try {
-    const TELEGRAM_BOT_TOKEN = '8869110646:AAEwimc2bMvITHVpQLPks8SzHyb2EaqHVLU';
-    const CHAT_ID_ADMIN = '1144345988';
+    const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+    const CHAT_ID_ADMIN = process.env.TELEGRAM_CHAT_ID_ADMIN;
+
+    if (!TELEGRAM_BOT_TOKEN || !CHAT_ID_ADMIN) {
+      return NextResponse.json(
+        { success: false, error: 'Variabili TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID_ADMIN mancanti.' },
+        { status: 500 }
+      );
+    }
 
     // Recupero dati sicuro con blocchi separati
     let veicoli: any[] = [];
