@@ -161,12 +161,24 @@ export default function SchedaTecnicaFurgonePage() {
                 disabled={updatingStato}
                 onClick={() => handleCambioStato('disponibile')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                  stato === 'disponibile' || stato === 'attivo'
+                  stato === 'disponibile'
                     ? 'bg-emerald-600 text-white shadow-md'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                Attivo
+                Disponibile
+              </button>
+              <button
+                type="button"
+                disabled={updatingStato}
+                onClick={() => handleCambioStato('in_servizio')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                  stato === 'in_servizio'
+                    ? 'bg-amber-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                In Servizio
               </button>
               <button
                 type="button"
@@ -174,23 +186,11 @@ export default function SchedaTecnicaFurgonePage() {
                 onClick={() => handleCambioStato('manutenzione')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
                   stato === 'manutenzione'
-                    ? 'bg-amber-600 text-white shadow-md'
+                    ? 'bg-blue-600 text-white shadow-md'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
                 In Manutenzione
-              </button>
-              <button
-                type="button"
-                disabled={updatingStato}
-                onClick={() => handleCambioStato('fermo')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                  stato === 'fermo'
-                    ? 'bg-red-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Fermo
               </button>
             </div>
           </div>

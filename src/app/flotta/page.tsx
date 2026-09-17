@@ -317,7 +317,7 @@ export default function FlottaPage() {
           </div>
 
           <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-            {['TUTTI', 'disponibile', 'in_uso', 'in_manutenzione', 'fermo'].map((s) => (
+            {['TUTTI', 'disponibile', 'in_servizio', 'manutenzione'].map((s) => (
               <button
                 key={s}
                 onClick={() => setFiltroStato(s)}
@@ -361,15 +361,13 @@ export default function FlottaPage() {
                       onChange={(e) => handleUpdateStato(veicolo.id, e.target.value)}
                       className={`text-[10px] font-black px-2.5 py-1 rounded-full border-0 focus:ring-0 cursor-pointer uppercase tracking-wider ${
                         veicolo.stato === 'disponibile' ? 'bg-emerald-50 text-emerald-700' :
-                        veicolo.stato === 'in_uso' ? 'bg-amber-50 text-amber-700' :
-                        veicolo.stato === 'in_manutenzione' ? 'bg-blue-50 text-blue-700' :
-                        'bg-rose-50 text-[#E05353]'
+                        veicolo.stato === 'in_servizio' ? 'bg-amber-50 text-amber-700' :
+                        'bg-blue-50 text-blue-700'
                       }`}
                     >
                       <option value="disponibile">● DISPONIBILE</option>
-                      <option value="in_uso">● IN USO</option>
-                      <option value="in_manutenzione">● MANUTENZIONE</option>
-                      <option value="fermo">● FERMO</option>
+                      <option value="in_servizio">● IN SERVIZIO</option>
+                      <option value="manutenzione">● MANUTENZIONE</option>
                     </select>
                   </div>
 
@@ -459,9 +457,8 @@ export default function FlottaPage() {
                   className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold uppercase focus:outline-none focus:ring-2 focus:ring-[#E05353]"
                 >
                   <option value="disponibile">🟢 DISPONIBILE (Pronto)</option>
-                  <option value="in_uso">🟡 IN USO (Turno attivo)</option>
-                  <option value="in_manutenzione">🔵 IN MANUTENZIONE (Officina)</option>
-                  <option value="fermo">🔴 FERMO (Non utilizzabile)</option>
+                  <option value="in_servizio">🟡 IN SERVIZIO (Turno attivo)</option>
+                  <option value="manutenzione">🔵 IN MANUTENZIONE (Officina)</option>
                 </select>
               </div>
 

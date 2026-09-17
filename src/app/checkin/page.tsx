@@ -142,7 +142,7 @@ export default function CheckinPage() {
       // Il furgone selezionato diventa automaticamente "in uso" per la durata del turno.
       const { error: veicoloErr } = await supabase
         .from('veicoli')
-        .update({ stato: 'in_uso' })
+        .update({ stato: 'in_servizio' })
         .eq('targa', targa.trim().toUpperCase());
 
       if (veicoloErr) {
