@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/supabase';
+import { supabase, getPrivateFileUrl } from '@/supabase';
 import { 
   Receipt, 
   ArrowLeft, 
@@ -94,9 +94,10 @@ export default function GestioneSpesePage() {
           .from('fleet-documents')
           .upload(filePath, fileFattura);
 
+        // Salviamo il PERCORSO del file (bucket privato): il link si genera al momento
+        // della visualizzazione con un link firmato temporaneo.
         if (!upErr) {
-          const { data } = supabase.storage.from('fleet-documents').getPublicUrl(filePath);
-          fileUrl = data.publicUrl;
+          fileUrl = filePath;
         }
       }
 
@@ -194,8 +195,7 @@ export default function GestioneSpesePage() {
         const filePath = `invoices/DKV_MENSILE_${Date.now()}.${fileExt}`;
         const { error: upErr } = await supabase.storage.from('fleet-documents').upload(filePath, dkvFile);
         if (!upErr) {
-          const { data } = supabase.storage.from('fleet-documents').getPublicUrl(filePath);
-          fileUrl = data.publicUrl;
+          fileUrl = filePath;
         }
       }
 
@@ -475,15 +475,18 @@ export default function GestioneSpesePage() {
 
                   <div className="flex items-center gap-2 self-end sm:self-center">
                     {s.fattura_url && (
-                      <a
-                        href={s.fattura_url}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const url = await getPrivateFileUrl('fleet-documents', s.fattura_url);
+                          if (url) window.open(url, '_blank', 'noreferrer');
+                          else alert('Impossibile aprire il documento in questo momento. Riprova.');
+                        }}
                         className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition text-xs"
                       >
                         <ExternalLink className="w-3.5 h-3.5 text-red-400" />
                         Vedi Fattura
-                      </a>
+                      </button>
                     )}
 
                     <button

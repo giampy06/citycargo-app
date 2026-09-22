@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/supabase';
+import { supabase, getPrivateFileUrl } from '@/supabase';
 import { 
   ChevronLeft, 
   FileSignature, 
@@ -174,15 +174,18 @@ export default function RegistroFirmePage() {
                       <td className="px-5 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           {doc.file_url && (
-                            <a 
-                              href={doc.file_url} 
-                              target="_blank" 
-                              rel="noreferrer"
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const url = await getPrivateFileUrl('documenti-veicoli', doc.file_url);
+                                if (url) window.open(url, '_blank', 'noreferrer');
+                                else alert('Impossibile aprire il documento in questo momento. Riprova.');
+                              }}
                               className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors"
                               title="Scarica File Originale"
                             >
                               <Download className="w-4 h-4" />
-                            </a>
+                            </button>
                           )}
                           
                           {doc.firmato && doc.firma_url && (

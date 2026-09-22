@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/supabase';
+import { supabase, getPrivateFileUrl } from '@/supabase';
 import { 
   FileText, 
   ChevronLeft, 
@@ -89,10 +89,8 @@ export default function AdminCedoliniPage() {
 
       if (uploadError) throw uploadError;
 
-      const { data: publicUrlData } = supabase.storage
-        .from('cedolini')
-        .getPublicUrl(fileName);
-
+      // Salviamo il PERCORSO del file (bucket privato): il link si genera al momento
+      // della visualizzazione con un link firmato temporaneo.
       const { error: dbError } = await supabase
         .from('cedolini')
         .insert([
@@ -102,7 +100,7 @@ export default function AdminCedoliniPage() {
             mese: MeseSelezionato,
             anno: Number(AnnoSelezionato),
             mese_riferimento: `${MeseSelezionato} ${AnnoSelezionato}`,
-            file_url: publicUrlData.publicUrl,
+            file_url: fileName,
             firmato: false,
           },
         ]);
@@ -352,15 +350,18 @@ export default function AdminCedoliniPage() {
 
                 <div className="flex items-center gap-2 self-end sm:self-center">
                   {item.file_url && item.file_url !== '#' && (
-                    <a
-                      href={item.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const url = await getPrivateFileUrl('cedolini', item.file_url);
+                        if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                        else alert('Impossibile aprire il cedolino in questo momento. Riprova.');
+                      }}
                       className="py-2.5 px-3.5 bg-gray-50 hover:bg-gray-100 text-[#1E242B] rounded-2xl font-bold text-xs flex items-center gap-1.5 transition-colors border border-gray-100"
                     >
                       <Download className="w-3.5 h-3.5 text-gray-600" />
                       PDF
-                    </a>
+                    </button>
                   )}
 
                   {item.firmato && item.firma_url && (

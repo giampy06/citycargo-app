@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/supabase';
+import { supabase, getPrivateFileUrl } from '@/supabase';
 import { 
   ArrowLeft, 
   Wrench, 
@@ -92,6 +92,17 @@ export default function SchedaTecnicaFurgonePage() {
     }
   };
 
+  // Il bucket è privato: per aprire un documento generiamo prima un link temporaneo firmato,
+  // valido pochi minuti, invece di usare un link pubblico permanente.
+  const handleOpenDocumento = async (bucket: string, path: string) => {
+    const url = await getPrivateFileUrl(bucket, path);
+    if (url) {
+      window.open(url, '_blank', 'noreferrer');
+    } else {
+      alert('Impossibile aprire il documento in questo momento. Riprova.');
+    }
+  };
+
   const handleUploadDocumento = async (e: React.ChangeEvent<HTMLInputElement>, tipo: 'libretto' | 'assicurazione') => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -104,8 +115,9 @@ export default function SchedaTecnicaFurgonePage() {
       const { error: upErr } = await supabase.storage.from('fleet-documents').upload(filePath, file);
       if (upErr) throw upErr;
 
-      const { data: urlData } = supabase.storage.from('fleet-documents').getPublicUrl(filePath);
-      const updateField = tipo === 'libretto' ? { libretto_url: urlData.publicUrl } : { assicurazione_url: urlData.publicUrl };
+      // Salviamo il PERCORSO del file, non un link pubblico: il bucket è privato,
+      // quindi ad ogni visualizzazione generiamo un link temporaneo firmato (vedi handleOpenDocumento).
+      const updateField = tipo === 'libretto' ? { libretto_url: filePath } : { assicurazione_url: filePath };
 
       const { error: dbErr } = await supabase.from('veicoli').update(updateField).eq('targa', targa);
       if (dbErr) throw dbErr;
@@ -250,9 +262,9 @@ export default function SchedaTecnicaFurgonePage() {
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-slate-200">Libretto Circolazione</span>
                 {veicolo?.libretto_url ? (
-                  <a href={veicolo.libretto_url} target="_blank" rel="noreferrer" className="text-xs text-red-400 hover:text-red-300 font-semibold flex items-center gap-1">
+                  <button type="button" onClick={() => handleOpenDocumento('fleet-documents', veicolo.libretto_url)} className="text-xs text-red-400 hover:text-red-300 font-semibold flex items-center gap-1">
                     Visualizza <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+                  </button>
                 ) : (
                   <span className="text-[10px] text-slate-500">Mancante</span>
                 )}
@@ -267,9 +279,9 @@ export default function SchedaTecnicaFurgonePage() {
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-slate-200">Polizza Assicurativa</span>
                 {veicolo?.assicurazione_url ? (
-                  <a href={veicolo.assicurazione_url} target="_blank" rel="noreferrer" className="text-xs text-red-400 hover:text-red-300 font-semibold flex items-center gap-1">
+                  <button type="button" onClick={() => handleOpenDocumento('fleet-documents', veicolo.assicurazione_url)} className="text-xs text-red-400 hover:text-red-300 font-semibold flex items-center gap-1">
                     Visualizza <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+                  </button>
                 ) : (
                   <span className="text-[10px] text-slate-500">Mancante</span>
                 )}
@@ -335,9 +347,9 @@ export default function SchedaTecnicaFurgonePage() {
                   </div>
 
                   {s.fattura_url && (
-                    <a href={s.fattura_url} target="_blank" rel="noreferrer" className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition text-[11px] border border-slate-700">
+                    <button type="button" onClick={() => handleOpenDocumento('fleet-documents', s.fattura_url)} className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition text-[11px] border border-slate-700">
                       <ExternalLink className="w-3.5 h-3.5 text-red-400" /> Vedi Doc
-                    </a>
+                    </button>
                   )}
                 </div>
               ))}

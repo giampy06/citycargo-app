@@ -63,19 +63,18 @@ export default function AutistaLoginPage() {
         if (signUpError) throw new Error(signUpError.message);
         
         if (authData.user) {
-          // 2. Upload Foto Patente Fronte nel bucket
+          // 2. Upload Foto Patente Fronte nel bucket (privato: salviamo solo il percorso,
+          // il link visibile si genera al momento della visualizzazione da parte dell'admin)
           const extFronte = fotoFronte.name.split('.').pop();
           const pathFronte = `patenti/${authData.user.id}_fronte.${extFronte}`;
           const { error: errFronte } = await supabase.storage.from('documenti-veicoli').upload(pathFronte, fotoFronte);
           if (errFronte) throw new Error('Errore nel caricamento della foto Patente Fronte.');
-          const urlFronte = supabase.storage.from('documenti-veicoli').getPublicUrl(pathFronte).data.publicUrl;
 
           // 3. Upload Foto Patente Retro
           const extRetro = fotoRetro.name.split('.').pop();
           const pathRetro = `patenti/${authData.user.id}_retro.${extRetro}`;
           const { error: errRetro } = await supabase.storage.from('documenti-veicoli').upload(pathRetro, fotoRetro);
           if (errRetro) throw new Error('Errore nel caricamento della foto Patente Retro.');
-          const urlRetro = supabase.storage.from('documenti-veicoli').getPublicUrl(pathRetro).data.publicUrl;
 
           // 4. Salvataggio Profilo Autista con prova formale GDPR
           const { error: dbError } = await supabase.from('autisti').insert([{
@@ -85,8 +84,8 @@ export default function AutistaLoginPage() {
             cognome: cognome,
             telefono: telefono,
             numero_patente: numeroPatente,
-            foto_patente_fronte: urlFronte,
-            foto_patente_retro: urlRetro,
+            foto_patente_fronte: pathFronte,
+            foto_patente_retro: pathRetro,
             stato: 'in_attesa',
             consenso_privacy: true,
             data_accettazione_privacy: new Date().toISOString(),

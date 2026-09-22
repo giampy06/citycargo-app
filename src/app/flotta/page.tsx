@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/supabase';
+import { supabase, getPrivateFileUrl } from '@/supabase';
 import { 
   Truck, 
   ChevronLeft, 
@@ -109,6 +109,18 @@ export default function FlottaPage() {
     }
   };
 
+  // Il bucket è privato: generiamo un link temporaneo firmato al momento dell'apertura,
+  // invece di usare un link pubblico permanente.
+  const handleOpenDocMezzo = async (path: string, titolo: string) => {
+    const url = await getPrivateFileUrl('documenti-veicoli', path);
+    if (url) {
+      setDocModalUrl(url);
+      setDocModalTitolo(titolo);
+    } else {
+      alert('Impossibile aprire il documento in questo momento. Riprova.');
+    }
+  };
+
   // Upload Foto Documento del Mezzo (Libretto, Assicurazione, Revisione)
   const handleUploadDocMezzo = async (file: File, tipo: 'foto_libretto' | 'foto_assicurazione' | 'foto_revisione') => {
     if (!selectedVeicolo) return;
@@ -121,8 +133,9 @@ export default function FlottaPage() {
       const { error: upErr } = await supabase.storage.from('documenti-veicoli').upload(path, file);
       if (upErr) throw upErr;
 
-      const { data: urlData } = supabase.storage.from('documenti-veicoli').getPublicUrl(path);
-      const url = urlData.publicUrl;
+      // Salviamo il PERCORSO del file (bucket privato): il link visibile si genera
+      // al momento dell'apertura tramite handleOpenDocMezzo, con validità temporanea.
+      const url = path;
 
       const { error: dbErr } = await supabase
         .from('veicoli')
@@ -487,7 +500,7 @@ export default function FlottaPage() {
                     <div className="space-y-1.5">
                       <button
                         type="button"
-                        onClick={() => { setDocModalUrl(selectedVeicolo.foto_libretto); setDocModalTitolo(`Libretto - ${selectedVeicolo.targa}`); }}
+                        onClick={() => handleOpenDocMezzo(selectedVeicolo.foto_libretto, `Libretto - ${selectedVeicolo.targa}`)}
                         className="w-full py-1.5 bg-white hover:bg-gray-100 border border-gray-200 text-xs font-bold text-[#1E242B] rounded-xl flex items-center justify-center gap-1"
                       >
                         <Eye className="w-3.5 h-3.5 text-[#E05353]" /> Vedi Foto
@@ -523,7 +536,7 @@ export default function FlottaPage() {
                     <div className="space-y-1.5">
                       <button
                         type="button"
-                        onClick={() => { setDocModalUrl(selectedVeicolo.foto_assicurazione); setDocModalTitolo(`Assicurazione - ${selectedVeicolo.targa}`); }}
+                        onClick={() => handleOpenDocMezzo(selectedVeicolo.foto_assicurazione, `Assicurazione - ${selectedVeicolo.targa}`)}
                         className="w-full py-1.5 bg-white hover:bg-gray-100 border border-gray-200 text-xs font-bold text-[#1E242B] rounded-xl flex items-center justify-center gap-1"
                       >
                         <Eye className="w-3.5 h-3.5 text-blue-600" /> Vedi Foto
@@ -559,7 +572,7 @@ export default function FlottaPage() {
                     <div className="space-y-1.5">
                       <button
                         type="button"
-                        onClick={() => { setDocModalUrl(selectedVeicolo.foto_revisione); setDocModalTitolo(`Revisione - ${selectedVeicolo.targa}`); }}
+                        onClick={() => handleOpenDocMezzo(selectedVeicolo.foto_revisione, `Revisione - ${selectedVeicolo.targa}`)}
                         className="w-full py-1.5 bg-white hover:bg-gray-100 border border-gray-200 text-xs font-bold text-[#1E242B] rounded-xl flex items-center justify-center gap-1"
                       >
                         <Eye className="w-3.5 h-3.5 text-emerald-600" /> Vedi Foto
@@ -673,14 +686,17 @@ export default function FlottaPage() {
                       </div>
 
                       {s.fattura_url && (
-                        <a
-                          href={s.fattura_url}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const url = await getPrivateFileUrl('fleet-documents', s.fattura_url);
+                            if (url) window.open(url, '_blank', 'noreferrer');
+                            else alert('Impossibile aprire il documento in questo momento. Riprova.');
+                          }}
                           className="bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition text-[10px]"
                         >
                           <ExternalLink className="w-3 h-3 text-[#E05353]" /> Vedi
-                        </a>
+                        </button>
                       )}
                     </div>
                   ))}

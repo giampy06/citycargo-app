@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/supabase';
+import { supabase, getPrivateFileUrl } from '@/supabase';
 import { 
   Users, 
   ChevronLeft, 
@@ -151,7 +151,9 @@ export default function GestioneAutistiPage() {
       const { error: upErr } = await supabase.storage.from('documenti-veicoli').upload(path, fileDoc);
       if (upErr) throw upErr;
 
-      const { data: urlData } = supabase.storage.from('documenti-veicoli').getPublicUrl(path);
+      // Salviamo il PERCORSO del file (bucket privato): il link si genera al momento
+      // della visualizzazione con un link firmato temporaneo.
+      const filePathSalvato = path;
 
       if (isBroadcastMode) {
         const autistiAttivi = autisti.filter(a => a.id);
@@ -162,7 +164,7 @@ export default function GestioneAutistiPage() {
         const payload = autistiAttivi.map(a => ({
           titolo: titoloDoc,
           descrizione: descDoc,
-          file_url: urlData.publicUrl,
+          file_url: filePathSalvato,
           autista_id: a.id,
           richiede_firma: true,
           firmato: false
@@ -179,7 +181,7 @@ export default function GestioneAutistiPage() {
           {
             titolo: titoloDoc,
             descrizione: descDoc,
-            file_url: urlData.publicUrl,
+            file_url: filePathSalvato,
             autista_id: selectedAutista.id,
             richiede_firma: true,
             firmato: false
@@ -382,27 +384,33 @@ export default function GestioneAutistiPage() {
               </span>
               <div className="grid grid-cols-2 gap-3">
                 {selectedAutista.foto_patente_fronte ? (
-                  <a
-                    href={selectedAutista.foto_patente_fronte}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const url = await getPrivateFileUrl('documenti-veicoli', selectedAutista.foto_patente_fronte);
+                      if (url) window.open(url, '_blank', 'noreferrer');
+                      else alert('Impossibile aprire il documento in questo momento. Riprova.');
+                    }}
                     className="p-3 bg-[#F8F9FB] border border-gray-200 rounded-2xl text-center text-xs font-bold text-[#E05353] flex items-center justify-center gap-1 hover:bg-gray-100"
                   >
                     <ExternalLink className="w-3.5 h-3.5" /> Patente Fronte
-                  </a>
+                  </button>
                 ) : (
                   <div className="p-3 bg-gray-50 rounded-2xl text-center text-xs text-gray-400">Patente Fronte non caricata</div>
                 )}
 
                 {selectedAutista.foto_patente_retro ? (
-                  <a
-                    href={selectedAutista.foto_patente_retro}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const url = await getPrivateFileUrl('documenti-veicoli', selectedAutista.foto_patente_retro);
+                      if (url) window.open(url, '_blank', 'noreferrer');
+                      else alert('Impossibile aprire il documento in questo momento. Riprova.');
+                    }}
                     className="p-3 bg-[#F8F9FB] border border-gray-200 rounded-2xl text-center text-xs font-bold text-[#E05353] flex items-center justify-center gap-1 hover:bg-gray-100"
                   >
                     <ExternalLink className="w-3.5 h-3.5" /> Patente Retro
-                  </a>
+                  </button>
                 ) : (
                   <div className="p-3 bg-gray-50 rounded-2xl text-center text-xs text-gray-400">Patente Retro non caricata</div>
                 )}

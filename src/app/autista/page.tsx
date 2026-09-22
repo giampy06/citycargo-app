@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/supabase';
+import { supabase, getPrivateFileUrl } from '@/supabase';
 import { 
   LogOut, 
   Play, 
@@ -341,14 +341,17 @@ export default function AppAutistaDashboard() {
             </div>
 
             <div className="space-y-2">
-              <a
-                href={docDaFirmare.file_url}
-                target="_blank"
-                rel="noreferrer"
-                className="block p-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-2xl text-center text-xs font-bold text-[#E05353] transition"
+              <button
+                type="button"
+                onClick={async () => {
+                  const url = await getPrivateFileUrl('documenti-veicoli', docDaFirmare.file_url);
+                  if (url) window.open(url, '_blank', 'noreferrer');
+                  else alert('Impossibile aprire il documento in questo momento. Riprova.');
+                }}
+                className="block w-full p-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-2xl text-center text-xs font-bold text-[#E05353] transition"
               >
                 Apri e Leggi il Documento Originale 📄
-              </a>
+              </button>
 
               <p className="text-[11px] text-gray-500 font-medium">
                 Apponi la tua firma nel riquadro sottostante:

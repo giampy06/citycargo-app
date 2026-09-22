@@ -85,13 +85,14 @@ export default function CheckinPage() {
       .upload(filePath, stampedBlob, { contentType: 'image/jpeg' });
 
     if (!upErr) {
-      const { data: pUrl } = supabase.storage.from('vehicle-inspections').getPublicUrl(filePath);
+      // Salviamo il PERCORSO del file (bucket privato): il link visibile si genera
+      // al momento della visualizzazione nella Control Room, con validità temporanea.
       await supabase.from('verbali_foto').insert([
         {
           turno_id: turnoId,
           tipo_controllo: 'checkin',
           tipo_foto: tipoFoto,
-          foto_url: pUrl.publicUrl,
+          foto_url: filePath,
           targa: targa.toUpperCase(),
           autista_nome: autistaNome,
           coordinate_gps: gpsPos || null,

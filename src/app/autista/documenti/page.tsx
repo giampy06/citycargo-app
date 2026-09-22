@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/supabase';
+import { supabase, getPrivateFileUrl } from '@/supabase';
 import { 
   FileText, 
   ChevronLeft, 
@@ -176,15 +176,18 @@ export default function DocumentiAutistaPage() {
               </div>
 
               <div className="pt-2 border-t border-gray-100 flex items-center gap-2">
-                <a
-                  href={doc.file_url}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const url = await getPrivateFileUrl('documenti-veicoli', doc.file_url);
+                    if (url) window.open(url, '_blank', 'noreferrer');
+                    else alert('Impossibile aprire il documento in questo momento. Riprova.');
+                  }}
                   className="flex-1 py-3 bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-bold rounded-2xl flex items-center justify-center gap-1.5 transition border border-gray-200"
                 >
                   <FileText className="w-4 h-4 text-slate-700" />
                   Leggi PDF
-                </a>
+                </button>
 
                 {!doc.firmato && (
                   <button

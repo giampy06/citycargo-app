@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/supabase';
+import { supabase, getPrivateFileUrl } from '@/supabase';
 import NotificationsBell from '@/components/NotificationsBell';
 import { 
   ShieldCheck, 
@@ -127,7 +127,17 @@ export default function AdminDashboardPage() {
         .order('data_ora', { ascending: true });
 
       if (error) throw error;
-      setVerbaliFoto(data || []);
+
+      // Il bucket è privato: generiamo un link firmato temporaneo per ogni foto,
+      // così <img> e il pulsante "Ingrandisci" possono mostrarle davvero.
+      const fotoConLinkFirmati = await Promise.all(
+        (data || []).map(async (foto) => {
+          const urlFirmato = await getPrivateFileUrl('vehicle-inspections', foto.foto_url);
+          return { ...foto, foto_url: urlFirmato || foto.foto_url };
+        })
+      );
+
+      setVerbaliFoto(fotoConLinkFirmati);
     } catch (err: any) {
       console.error('Errore recupero foto:', err);
       setVerbaliFoto([]);
