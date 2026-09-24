@@ -37,6 +37,23 @@ un'iterazione precedente del progetto. Da valutare se eliminarle in futuro,
 ma non urgente.
 
 ## Sicurezza — stato attuale (già sistemato)
+- 🔴 **(RISOLTO) Escalation di privilegi su `profili`**: fino al 2026-09-24
+  QUALSIASI autista poteva promuoversi ad admin con un semplice
+  `PATCH /rest/v1/profili?id=eq.<proprio-id>` impostando `ruolo: 'admin'`
+  — nessuna protezione sul campo `ruolo` della propria riga. Era limitato
+  alla propria riga (non poteva toccare righe altrui), ma bastava questo
+  per ottenere accesso admin completo su tutto il resto del sistema (dato
+  che `is_admin()` legge proprio questo campo). Era la falla più grave
+  trovata in tutta la revisione. Corretta con un trigger
+  (`blocca_autopromozione_ruolo`, BEFORE UPDATE su `profili`) che rifiuta
+  qualsiasi cambio del campo `ruolo` da parte di chi non è già admin.
+  **Nota**: ogni autista ha comunque una propria riga in `profili` (verificato
+  che esiste già per Marco Togni), ma **l'admin non riesce a vederla** nemmeno
+  cercandola per id esatto — la SELECT su `profili` sembra ristretta a
+  "solo la propria riga" anche per l'account admin (a differenza del resto
+  del sistema, dove `is_admin()` dà accesso a tutto). Non è un problema di
+  sicurezza (è più restrittivo, non meno), ma è un'inconsistenza rispetto
+  al modello generale, da capire se è voluta.
 - Bucket Storage **privati** (non pubblici): `documenti-veicoli`, `fleet-documents`,
   `vehicle-inspections`, `cedolini`. Il codice usa `getPrivateFileUrl(bucket, path)`
   in `src/supabase.ts` per generare link firmati temporanei — i campi `_url` nel
