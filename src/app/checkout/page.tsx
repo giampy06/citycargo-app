@@ -54,32 +54,15 @@ export default function CheckoutPage() {
 
       const kmPercorsi = kmFineNum - kmInizioNum;
 
-      // Calcolo compenso base (es. 85€ a turno o tariffa fissa)
-      const compenso = 85.00;
-
-      const { error } = await supabase
-        .from('turni_presenze')
-        .update({
-          km_fine: kmFineNum,
-          km_percorsi: kmPercorsi,
-          compenso_giornaliero: compenso,
-          stato: 'chiuso',
-        })
-        .eq('id', turnoAperto.id);
-
-      if (error) throw error;
-
-      // Aggiorna anche i km attuali del veicolo nella flotta.
-      // Passa dalla funzione chiudi_turno_veicolo (SECURITY DEFINER) che verifica
-      // lato server che esista un turno chiuso corrispondente per questo autista.
-      const { error: veicoloErr } = await supabase.rpc('chiudi_turno_veicolo', {
-        p_targa: turnoAperto.targa_mezzo,
+      // chiudi_turno (SECURITY DEFINER) chiude il turno e riporta il veicolo
+      // "disponibile" con i km aggiornati in un'unica operazione lato server,
+      // verificando che il turno appartenga davvero a chi chiama.
+      const { error } = await supabase.rpc('chiudi_turno', {
+        p_turno_id: turnoAperto.id,
         p_km_finali: kmFineNum,
       });
 
-      if (veicoloErr) {
-        throw new Error(`Turno chiuso, ma stato veicolo non aggiornato: ${veicoloErr.message}`);
-      }
+      if (error) throw new Error(`Impossibile chiudere il turno: ${error.message}`);
 
       alert(`Turno chiuso con successo! Percorsi ${kmPercorsi} km.`);
       router.push('/autista');

@@ -131,35 +131,23 @@ export default function CheckinPage() {
 
     try {
       setUploadProgressText('Creazione verbale di servizio...');
-      const { data: turno, error: turnoErr } = await supabase
-        .from('turni_presenze')
-        .insert([
-          {
-            autista_id: user?.id,
-            nome_autista: autistaNome,
-            targa_mezzo: targa.trim().toUpperCase(),
-            appalto,
-            km_inizio: Number(kmInizio),
-            codice_verbale: codiceVerbale,
-            stato: 'aperto',
-            note_inizio: noteInizio || null,
-          },
-        ])
-        .select()
+      // avvia_turno (SECURITY DEFINER) crea il turno e aggiorna lo stato del
+      // veicolo in un'unica operazione lato server, verificando che il veicolo
+      // sia davvero "disponibile" in quel momento: un autista non può più
+      // fabbricare un turno su un veicolo che non è realmente libero.
+      const { data, error: turnoErr } = await supabase
+        .rpc('avvia_turno', {
+          p_targa: targa.trim().toUpperCase(),
+          p_appalto: appalto,
+          p_km_inizio: Number(kmInizio),
+          p_codice_verbale: codiceVerbale,
+          p_nome_autista: autistaNome,
+          p_note_inizio: noteInizio || null,
+        })
         .single();
 
-      if (turnoErr) throw turnoErr;
-
-      // Il furgone selezionato diventa automaticamente "in uso" per la durata del turno.
-      // Passa dalla funzione avvia_turno_veicolo (SECURITY DEFINER) che verifica
-      // lato server che chi chiama abbia davvero un turno aperto su questa targa.
-      const { error: veicoloErr } = await supabase.rpc('avvia_turno_veicolo', {
-        p_targa: targa.trim().toUpperCase(),
-      });
-
-      if (veicoloErr) {
-        throw new Error(`Turno registrato, ma stato veicolo non aggiornato: ${veicoloErr.message}`);
-      }
+      if (turnoErr) throw new Error(`Impossibile avviare il turno: ${turnoErr.message}`);
+      const turno = data as { id: string };
 
       // Upload 4 Foto Lati Veicolo con Watermark
       setUploadProgressText('Timbro e invio Lato Frontale (1/4)...');

@@ -51,6 +51,39 @@ ma non urgente.
 - Variabili sensibili (TELEGRAM_BOT_TOKEN, GEMINI_API_KEY) sono in variabili
   d'ambiente su Vercel, non nel codice.
 
+## Funzioni SQL SECURITY DEFINER (vivono solo su Supabase, NON in questo repo)
+Non esiste ancora un sistema di migrazioni versionate: queste funzioni sono
+state create a mano via SQL Editor di Supabase e non compaiono da nessuna
+parte nel codice sorgente, solo nelle chiamate `.rpc(...)`. Se in futuro
+sembrano "non trovate" (`PGRST202 - Could not find the function`), il
+problema è quasi certamente che non sono state (ri)create sul progetto
+Supabase che si sta usando, non un bug nel codice TypeScript.
+
+- `avvia_turno(p_targa, p_appalto, p_km_inizio, p_codice_verbale, p_nome_autista, p_note_inizio)`
+  — chiamata da `src/app/checkin/page.tsx`. Crea la riga in `turni_presenze`
+  e porta il veicolo a `stato = 'in_servizio'` in un'unica transazione,
+  bloccando la riga del veicolo (`FOR UPDATE`) e rifiutando l'operazione se
+  il veicolo non è realmente `disponibile` in quel momento.
+- `chiudi_turno(p_turno_id, p_km_finali)` — chiamata da
+  `src/app/checkout/page.tsx`. Chiude il turno (verifica che appartenga
+  davvero a chi chiama ed sia `aperto`) e riporta il veicolo a
+  `disponibile` con i km aggiornati.
+- Su `turni_presenze` esistono 2 RESTRICTIVE policy (`solo_admin_insert_diretto_turni`,
+  `solo_admin_update_diretto_turni`) che impediscono a un autista di
+  scrivere direttamente sulla tabella (via API, bypassando l'app) — un
+  autista *deve* passare da `avvia_turno`/`chiudi_turno`. Un admin non è
+  toccato da queste policy.
+- **Perché esistono**: prima di queste funzioni, l'update diretto di
+  `veicoli.stato`/`km_attuali` da parte di un autista era bloccato in
+  modo silenzioso dalla RLS (il check-in sembrava funzionare ma il
+  veicolo restava sempre "disponibile"). Un primo tentativo di fix
+  (funzioni che si fidavano della sola esistenza di una riga
+  `turni_presenze` per autorizzare) si è rivelato exploitabile: un
+  autista poteva fabbricare una riga `turni_presenze` per QUALSIASI targa
+  (non solo la propria) e usarla per forzare stato/km di un veicolo non
+  suo. Le RESTRICTIVE policy + il controllo `FOR UPDATE`/disponibilità
+  dentro `avvia_turno` chiudono questo buco.
+
 ## Da fare / da tenere d'occhio
 - Esiste un secondo progetto Vercel duplicato "citycargo-flotta" collegato
   allo stesso repo — è inutilizzato, dà sempre errore di build, andrebbe
