@@ -3,22 +3,30 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/supabase';
-import { 
-  Calendar, 
-  ChevronLeft, 
-  ChevronRight, 
-  Download, 
-  Search, 
-  RefreshCw, 
-  Truck, 
-  Users, 
-  Euro, 
-  FileSpreadsheet, 
-  Clock, 
-  CheckCircle2, 
+import { supabase, getPrivateFileUrl } from '@/supabase';
+import {
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Search,
+  RefreshCw,
+  Truck,
+  Users,
+  Euro,
+  FileSpreadsheet,
+  Clock,
+  CheckCircle2,
   FolderCheck,
-  Loader2
+  Loader2,
+  Eye,
+  Edit3,
+  Trash2,
+  Check,
+  X,
+  Camera,
+  ExternalLink,
+  MapPin,
 } from 'lucide-react';
 
 export default function ArchivioPresenzePage() {
@@ -26,6 +34,17 @@ export default function ArchivioPresenzePage() {
   const [turni, setTurni] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [ricerca, setRicerca] = useState('');
+
+  // Modifica turno (targa/km finali)
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTarga, setEditTarga] = useState('');
+  const [editKmFine, setEditKmFine] = useState('');
+
+  // Ispezione verbale fotografico
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [selectedTurno, setSelectedTurno] = useState<any | null>(null);
+  const [verbaliFoto, setVerbaliFoto] = useState<any[]>([]);
+  const [loadingFoto, setLoadingFoto] = useState(false);
 
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -55,6 +74,89 @@ export default function ArchivioPresenzePage() {
   useEffect(() => {
     fetchPresenze();
   }, []);
+
+  const handleOpenPhotoInspection = async (turno: any) => {
+    setSelectedTurno(turno);
+    setIsPhotoModalOpen(true);
+    setLoadingFoto(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('verbali_foto')
+        .select('*')
+        .eq('turno_id', turno.id)
+        .order('data_ora', { ascending: true });
+
+      if (error) throw error;
+
+      // Il bucket è privato: generiamo un link firmato temporaneo per ogni foto.
+      const fotoConLinkFirmati = await Promise.all(
+        (data || []).map(async (foto) => {
+          const urlFirmato = await getPrivateFileUrl('vehicle-inspections', foto.foto_url);
+          return { ...foto, foto_url: urlFirmato || foto.foto_url };
+        })
+      );
+
+      setVerbaliFoto(fotoConLinkFirmati);
+    } catch (err: any) {
+      console.error('Errore recupero foto:', err);
+      setVerbaliFoto([]);
+    } finally {
+      setLoadingFoto(false);
+    }
+  };
+
+  const handleAdminUpdate = async (turno: any) => {
+    const kmNum = editKmFine ? Number(editKmFine) : null;
+
+    if (kmNum !== null && kmNum < Number(turno.km_inizio)) {
+      alert(`I km finali non possono essere inferiori a quelli iniziali (${turno.km_inizio})`);
+      return;
+    }
+
+    try {
+      const payload: any = {
+        targa_mezzo: editTarga.trim().toUpperCase(),
+      };
+
+      if (kmNum !== null) {
+        payload.km_fine = kmNum;
+        payload.km_percorsi = kmNum - Number(turno.km_inizio);
+      }
+
+      const { error } = await supabase
+        .from('turni_presenze')
+        .update(payload)
+        .eq('id', turno.id);
+
+      if (error) throw error;
+
+      setEditingId(null);
+      fetchPresenze();
+      alert('Turno aggiornato con successo!');
+    } catch (err: any) {
+      alert(`Errore: ${err.message}`);
+    }
+  };
+
+  const handleDeleteTurno = async (id: string, codice: string) => {
+    const conferma = window.confirm(`Sei sicuro di voler eliminare il turno ${codice}? L'operazione è irreversibile.`);
+    if (!conferma) return;
+
+    try {
+      const { error } = await supabase
+        .from('turni_presenze')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      alert('Turno eliminato dal registro!');
+      fetchPresenze();
+    } catch (err: any) {
+      alert(`Errore cancellazione: ${err.message}`);
+    }
+  };
 
   const handlePrevMonth = () => {
     if (currentMonth === 0) {
@@ -304,7 +406,8 @@ export default function ArchivioPresenzePage() {
                         <th className="pb-2.5">Km Inizio / Fine</th>
                         <th className="pb-2.5">Percorsi</th>
                         <th className="pb-2.5">Compenso</th>
-                        <th className="pb-2.5 text-right">Stato</th>
+                        <th className="pb-2.5">Stato</th>
+                        <th className="pb-2.5 text-right">Azioni</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 text-gray-700 font-medium">
@@ -314,7 +417,16 @@ export default function ArchivioPresenzePage() {
                             {t.nome_autista || 'Autista'}
                           </td>
                           <td className="py-3 font-mono font-bold text-[#1E242B]">
-                            {t.targa_mezzo}
+                            {editingId === t.id ? (
+                              <input
+                                type="text"
+                                value={editTarga}
+                                onChange={(e) => setEditTarga(e.target.value.toUpperCase())}
+                                className="w-24 px-2 py-1 bg-white border border-gray-300 rounded text-xs font-bold uppercase"
+                              />
+                            ) : (
+                              t.targa_mezzo
+                            )}
                           </td>
                           <td className="py-3">
                             <span className="font-bold text-gray-700 mr-2">{t.appalto}</span>
@@ -323,8 +435,22 @@ export default function ArchivioPresenzePage() {
                             </span>
                           </td>
                           <td className="py-3 text-gray-500">
-                            {Number(t.km_inizio).toLocaleString('it-IT')} km
-                            {t.km_fine ? ` → ${Number(t.km_fine).toLocaleString('it-IT')} km` : ''}
+                            {editingId === t.id ? (
+                              <div className="flex items-center gap-1">
+                                <span>{t.km_inizio} → </span>
+                                <input
+                                  type="number"
+                                  value={editKmFine}
+                                  onChange={(e) => setEditKmFine(e.target.value)}
+                                  className="w-20 px-2 py-1 bg-white border border-gray-300 rounded text-xs font-bold"
+                                />
+                              </div>
+                            ) : (
+                              <>
+                                {Number(t.km_inizio).toLocaleString('it-IT')} km
+                                {t.km_fine ? ` → ${Number(t.km_fine).toLocaleString('it-IT')} km` : ''}
+                              </>
+                            )}
                           </td>
                           <td className="py-3 font-bold text-emerald-600">
                             {t.km_percorsi ? `+${t.km_percorsi} km` : '—'}
@@ -332,7 +458,7 @@ export default function ArchivioPresenzePage() {
                           <td className="py-3 font-bold text-gray-800">
                             {t.compenso_giornaliero ? `€ ${Number(t.compenso_giornaliero).toFixed(2)}` : '—'}
                           </td>
-                          <td className="py-3 text-right">
+                          <td className="py-3">
                             {t.stato === 'aperto' ? (
                               <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-bold text-[10px]">
                                 In corso
@@ -341,6 +467,52 @@ export default function ArchivioPresenzePage() {
                               <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px]">
                                 Completato
                               </span>
+                            )}
+                          </td>
+                          <td className="py-3 text-right">
+                            {editingId === t.id ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  onClick={() => handleAdminUpdate(t)}
+                                  className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setEditingId(null)}
+                                  className="p-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  onClick={() => handleOpenPhotoInspection(t)}
+                                  className="text-gray-400 hover:text-[#E05353] p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
+                                  title="Ispeziona Foto"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingId(t.id);
+                                    setEditTarga(t.targa_mezzo || '');
+                                    setEditKmFine(t.km_fine?.toString() || '');
+                                  }}
+                                  className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                                  title="Modifica Targa o Km"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteTurno(t.id, t.codice_verbale)}
+                                  className="text-gray-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
+                                  title="Elimina Turno Errato"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>
@@ -353,6 +525,87 @@ export default function ArchivioPresenzePage() {
           </div>
         )}
       </main>
+
+      {/* MODALE ISPEZIONE VERBALE FOTOGRAFICO */}
+      {isPhotoModalOpen && selectedTurno && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-4xl w-full shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-base text-[#1E242B]">
+                    Verbale Fotografico {selectedTurno.codice_verbale}
+                  </h3>
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-rose-50 text-[#E05353]">
+                    {selectedTurno.targa_mezzo}
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  Conducente: <b className="text-gray-700 capitalize">{selectedTurno.nome_autista}</b> | Appalto: <b>{selectedTurno.appalto}</b>
+                </p>
+              </div>
+              <button
+                onClick={() => setIsPhotoModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {loadingFoto ? (
+              <div className="py-16 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin text-[#E05353]" />
+                Recupero scatti ad alta risoluzione con filigrana...
+              </div>
+            ) : verbaliFoto.length === 0 ? (
+              <div className="py-12 text-center text-xs text-gray-400 bg-[#F8F9FB] rounded-2xl border border-dashed border-gray-200">
+                Nessuna foto perimetrale archiviata per questo turno.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {verbaliFoto.map((foto) => (
+                    <div key={foto.id} className="bg-[#F8F9FB] border border-gray-200 rounded-2xl overflow-hidden flex flex-col justify-between">
+                      <div className="relative group">
+                        <img
+                          src={foto.foto_url}
+                          alt={foto.tipo_foto}
+                          className="w-full h-56 object-cover bg-black"
+                        />
+                        <a
+                          href={foto.foto_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="absolute top-3 right-3 bg-black/70 hover:bg-black text-white p-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow transition"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" /> Ingrandisci
+                        </a>
+                      </div>
+
+                      <div className="p-3 bg-white border-t border-gray-100 flex items-center justify-between text-xs">
+                        <div>
+                          <span className="font-extrabold text-[#1E242B] capitalize block">
+                            {foto.tipo_foto.replace('_', ' ').toUpperCase()}
+                          </span>
+                          <span className="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5">
+                            <Clock className="w-3 h-3" />
+                            {new Date(foto.data_ora).toLocaleString('it-IT')}
+                          </span>
+                        </div>
+                        {foto.coordinate_gps && (
+                          <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md border border-emerald-200 flex items-center gap-1">
+                            <MapPin className="w-3 h-3" /> {foto.coordinate_gps}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

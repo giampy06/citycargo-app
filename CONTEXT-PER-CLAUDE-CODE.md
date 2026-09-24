@@ -37,6 +37,19 @@ un'iterazione precedente del progetto. Da valutare se eliminarle in futuro,
 ma non urgente.
 
 ## Sicurezza — stato attuale (già sistemato)
+- **Revisione sistematica completa effettuata il 2026-09-24**: tutte le 4 API
+  routes, le 8 tabelle (`autisti`, `cedolini`, `documenti_aziendali`, `profili`,
+  `turni_presenze`, `vehicle_expenses`, `veicoli`, `verbali_foto`), i 4 bucket
+  storage (`documenti-veicoli`, `fleet-documents`, `cedolini`,
+  `vehicle-inspections`) e le 18 pagine dell'app sono state verificate
+  empiricamente (non solo lette nel codice) con tentativi reali di IDOR/
+  escalation. `cedolini`, `documenti_aziendali`, `autisti`, `vehicle_expenses`,
+  `verbali_foto`, `turni_presenze`, `veicoli` risultano ben protette a livello
+  di tabella — un autista non può leggere/scrivere righe di altri autisti,
+  falsificare verbali fotografici, spese, o bypassare le funzioni RPC per
+  alterare stato/km dei veicoli o i compensi. Tutte le pagine caricano senza
+  errori. Prima di questo giro erano state trovate e corrette le falle
+  elencate sotto.
 - 🔴 **(RISOLTO) Escalation di privilegi su `profili`**: fino al 2026-09-24
   QUALSIASI autista poteva promuoversi ad admin con un semplice
   `PATCH /rest/v1/profili?id=eq.<proprio-id>` impostando `ruolo: 'admin'`
