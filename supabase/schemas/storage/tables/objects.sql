@@ -20,6 +20,16 @@ CREATE POLICY "Storage public access verbali" ON "storage"."objects"
   USING ((bucket_id = 'verbali-furgoni'::text))
   WITH CHECK ((bucket_id = 'verbali-furgoni'::text));
 
+CREATE POLICY "admin_delete_cedolini_bucket" ON "storage"."objects"
+  FOR DELETE
+  TO "authenticated"
+  USING (((bucket_id = 'cedolini'::text) AND public.is_admin()));
+
+CREATE POLICY "admin_delete_fleet_documents" ON "storage"."objects"
+  FOR DELETE
+  TO "authenticated"
+  USING (((bucket_id = 'fleet-documents'::text) AND public.is_admin()));
+
 CREATE POLICY "admin_upload_fleet_documents" ON "storage"."objects"
   FOR INSERT
   TO "authenticated"
