@@ -87,8 +87,8 @@ export default function FlottaPage() {
     setSelectedVeicolo(veicolo);
     setEditKm(veicolo.km_attuali?.toString() || '');
     setEditNote(veicolo.note || '');
-    setEditAssicurazione(veicolo.scadenza_assicurazione || '');
-    setEditRevisione(veicolo.scadenza_revisione || '');
+    setEditAssicurazione(veicolo.data_scadenza_assicurazione || '');
+    setEditRevisione(veicolo.data_scadenza_revisione || '');
 
     // Recupera spese/fatture specifiche per questa targa
     setLoadingSpese(true);
@@ -166,8 +166,8 @@ export default function FlottaPage() {
         .update({
           km_attuali: editKm ? Number(editKm) : selectedVeicolo.km_attuali,
           note: editNote.trim() || null,
-          scadenza_assicurazione: editAssicurazione || null,
-          scadenza_revisione: editRevisione || null,
+          data_scadenza_assicurazione: editAssicurazione || null,
+          data_scadenza_revisione: editRevisione || null,
         })
         .eq('id', selectedVeicolo.id);
 
@@ -177,8 +177,8 @@ export default function FlottaPage() {
         ...selectedVeicolo,
         km_attuali: editKm ? Number(editKm) : selectedVeicolo.km_attuali,
         note: editNote.trim() || null,
-        scadenza_assicurazione: editAssicurazione || null,
-        scadenza_revisione: editRevisione || null,
+        data_scadenza_assicurazione: editAssicurazione || null,
+        data_scadenza_revisione: editRevisione || null,
       };
 
       setSelectedVeicolo(aggiornato);
@@ -245,9 +245,9 @@ export default function FlottaPage() {
           targa: targa.trim().toUpperCase(),
           modello: modello.trim() || 'Furgone Aziendale',
           km_attuali: kmAttuali ? Number(kmAttuali) : 0,
-          scadenza_assicurazione: scadenzaAssicurazione || null,
-          scadenza_revisione: scadenzaRevisione || null,
-          appalto_assegnato: appaltoAssegnato,
+          data_scadenza_assicurazione: scadenzaAssicurazione || null,
+          data_scadenza_revisione: scadenzaRevisione || null,
+          appalto_default: appaltoAssegnato,
           stato: 'disponibile',
         },
       ]);
@@ -386,7 +386,7 @@ export default function FlottaPage() {
 
                   <div className="mt-3">
                     <h3 className="font-extrabold text-sm text-[#1E242B]">{veicolo.modello}</h3>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Appalto: <b className="text-gray-700">{veicolo.appalto_assegnato || 'CITI'}</b></p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Appalto: <b className="text-gray-700">{veicolo.appalto_default || 'CITI'}</b></p>
                   </div>
 
                   <div className="mt-3 space-y-1.5 text-xs bg-[#F8F9FB] p-3 rounded-2xl text-gray-600">
@@ -401,14 +401,14 @@ export default function FlottaPage() {
                       <span className="flex items-center gap-1 text-[11px] text-gray-500">
                         <ShieldCheck className="w-3.5 h-3.5 text-gray-400" /> Assicurazione:
                       </span>
-                      <span className="text-[11px] font-bold">{veicolo.scadenza_assicurazione || 'Non inserita'}</span>
+                      <span className="text-[11px] font-bold">{veicolo.data_scadenza_assicurazione || 'Non inserita'}</span>
                     </div>
 
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1 text-[11px] text-gray-500">
                         <Calendar className="w-3.5 h-3.5 text-gray-400" /> Revisione:
                       </span>
-                      <span className="text-[11px] font-bold">{veicolo.scadenza_revisione || 'Non inserita'}</span>
+                      <span className="text-[11px] font-bold">{veicolo.data_scadenza_revisione || 'Non inserita'}</span>
                     </div>
                   </div>
                 </div>
@@ -448,7 +448,7 @@ export default function FlottaPage() {
                 </div>
                 <div>
                   <h2 className="font-black text-base text-[#1E242B]">{selectedVeicolo.modello}</h2>
-                  <span className="text-xs text-gray-400 font-medium">Appalto: <b>{selectedVeicolo.appalto_assegnato || 'CITI'}</b></span>
+                  <span className="text-xs text-gray-400 font-medium">Appalto: <b>{selectedVeicolo.appalto_default || 'CITI'}</b></span>
                 </div>
               </div>
 

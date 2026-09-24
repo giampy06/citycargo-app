@@ -20,13 +20,13 @@ export default function NotificationsBell() {
 
         veicoli?.forEach((v: any) => {
           const targa = v.targa || 'Mezzo';
-          if (v.scadenza_assicurazione) {
-            const diff = Math.ceil((new Date(v.scadenza_assicurazione).getTime() - oggi.getTime()) / (1000 * 60 * 60 * 24));
-            if (diff <= 15) tempAvvisi.push(`🚐 Furgone ${targa}: Assicurazione in scadenza (${v.scadenza_assicurazione})`);
+          if (v.data_scadenza_assicurazione) {
+            const diff = Math.ceil((new Date(v.data_scadenza_assicurazione).getTime() - oggi.getTime()) / (1000 * 60 * 60 * 24));
+            if (diff <= 15) tempAvvisi.push(`🚐 Furgone ${targa}: Assicurazione in scadenza (${v.data_scadenza_assicurazione})`);
           }
-          if (v.scadenza_revisione) {
-            const diff = Math.ceil((new Date(v.scadenza_revisione).getTime() - oggi.getTime()) / (1000 * 60 * 60 * 24));
-            if (diff <= 15) tempAvvisi.push(`🚐 Furgone ${targa}: Revisione in scadenza (${v.scadenza_revisione})`);
+          if (v.data_scadenza_revisione) {
+            const diff = Math.ceil((new Date(v.data_scadenza_revisione).getTime() - oggi.getTime()) / (1000 * 60 * 60 * 24));
+            if (diff <= 15) tempAvvisi.push(`🚐 Furgone ${targa}: Revisione in scadenza (${v.data_scadenza_revisione})`);
           }
         });
 
