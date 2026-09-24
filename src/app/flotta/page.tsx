@@ -55,6 +55,7 @@ export default function FlottaPage() {
   const [targa, setTarga] = useState('');
   const [modello, setModello] = useState('');
   const [kmAttuali, setKmAttuali] = useState('');
+  const [kmProssimoTagliando, setKmProssimoTagliando] = useState('');
   const [scadenzaAssicurazione, setScadenzaAssicurazione] = useState('');
   const [scadenzaRevisione, setScadenzaRevisione] = useState('');
   const [appaltoAssegnato, setAppaltoAssegnato] = useState('CITI');
@@ -239,14 +240,18 @@ export default function FlottaPage() {
 
     try {
       if (!targa) throw new Error('La targa è obbligatoria.');
+      if (!scadenzaAssicurazione) throw new Error('La scadenza assicurazione è obbligatoria.');
+      if (!scadenzaRevisione) throw new Error('La scadenza revisione è obbligatoria.');
+      if (!kmProssimoTagliando) throw new Error('Il km del prossimo tagliando è obbligatorio.');
 
       const { error } = await supabase.from('veicoli').insert([
         {
           targa: targa.trim().toUpperCase(),
           modello: modello.trim() || 'Furgone Aziendale',
           km_attuali: kmAttuali ? Number(kmAttuali) : 0,
-          data_scadenza_assicurazione: scadenzaAssicurazione || null,
-          data_scadenza_revisione: scadenzaRevisione || null,
+          km_prossimo_tagliando: Number(kmProssimoTagliando),
+          data_scadenza_assicurazione: scadenzaAssicurazione,
+          data_scadenza_revisione: scadenzaRevisione,
           appalto_default: appaltoAssegnato,
           stato: 'disponibile',
         },
@@ -257,6 +262,7 @@ export default function FlottaPage() {
       setTarga('');
       setModello('');
       setKmAttuali('');
+      setKmProssimoTagliando('');
       setScadenzaAssicurazione('');
       setScadenzaRevisione('');
       setIsModalOpen(false);
@@ -843,11 +849,24 @@ export default function FlottaPage() {
                 </div>
               </div>
 
+              <div>
+                <label className="text-[11px] font-bold text-gray-600 block mb-1">Km Prossimo Tagliando</label>
+                <input
+                  type="number"
+                  required
+                  placeholder="es. 155000"
+                  value={kmProssimoTagliando}
+                  onChange={(e) => setKmProssimoTagliando(e.target.value)}
+                  className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-gray-600 block mb-1">Scad. Assicurazione</label>
                   <input
                     type="date"
+                    required
                     value={scadenzaAssicurazione}
                     onChange={(e) => setScadenzaAssicurazione(e.target.value)}
                     className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
@@ -857,6 +876,7 @@ export default function FlottaPage() {
                   <label className="text-[11px] font-bold text-gray-600 block mb-1">Scad. Revisione</label>
                   <input
                     type="date"
+                    required
                     value={scadenzaRevisione}
                     onChange={(e) => setScadenzaRevisione(e.target.value)}
                     className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"

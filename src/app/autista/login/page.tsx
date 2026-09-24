@@ -42,7 +42,12 @@ export default function AutistaLoginPage() {
           email: email.trim().toLowerCase(),
           password: password,
         });
-        if (error) throw new Error('Email o password errati.');
+        if (error) {
+          if (error.message?.toLowerCase().includes('email not confirmed')) {
+            throw new Error('Devi prima confermare la tua email: controlla la posta (anche lo spam) e clicca sul link di conferma ricevuto dopo la candidatura.');
+          }
+          throw new Error('Email o password errati.');
+        }
         router.push('/autista');
 
       } else {
@@ -94,7 +99,7 @@ export default function AutistaLoginPage() {
 
           if (dbError) throw new Error('Errore durante il salvataggio dei dati nel database.');
           
-          setSuccessMsg('Registrazione completata! I tuoi documenti sono in fase di revisione. Attendi l\'approvazione dell\'amministratore prima di poter accedere.');
+          setSuccessMsg('Registrazione completata! Controlla la tua email (anche lo spam) e clicca sul link di conferma: senza quello non potrai accedere. I tuoi documenti sono inoltre in fase di revisione: attendi anche l\'approvazione dell\'amministratore prima di poter accedere.');
           setIsLogin(true);
         }
       }

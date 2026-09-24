@@ -46,7 +46,11 @@ export default function CheckinPage() {
       }
       setUser(session.user);
 
-      const { data: vData } = await supabase.from('veicoli').select('targa, modello').order('targa');
+      const { data: vData } = await supabase
+        .from('veicoli')
+        .select('targa, modello')
+        .eq('stato', 'disponibile')
+        .order('targa');
       if (vData && vData.length > 0) {
         setVeicoli(vData);
         setTarga(vData[0].targa);
@@ -84,20 +88,26 @@ export default function CheckinPage() {
       .from('vehicle-inspections')
       .upload(filePath, stampedBlob, { contentType: 'image/jpeg' });
 
-    if (!upErr) {
-      // Salviamo il PERCORSO del file (bucket privato): il link visibile si genera
-      // al momento della visualizzazione nella Control Room, con validità temporanea.
-      await supabase.from('verbali_foto').insert([
-        {
-          turno_id: turnoId,
-          tipo_controllo: 'checkin',
-          tipo_foto: tipoFoto,
-          foto_url: filePath,
-          targa: targa.toUpperCase(),
-          autista_nome: autistaNome,
-          coordinate_gps: gpsPos || null,
-        },
-      ]);
+    if (upErr) {
+      throw new Error(`Foto "${tipoControllo}" non caricata: ${upErr.message}`);
+    }
+
+    // Salviamo il PERCORSO del file (bucket privato): il link visibile si genera
+    // al momento della visualizzazione nella Control Room, con validità temporanea.
+    const { error: verbaleErr } = await supabase.from('verbali_foto').insert([
+      {
+        turno_id: turnoId,
+        tipo_controllo: 'checkin',
+        tipo_foto: tipoFoto,
+        foto_url: filePath,
+        targa: targa.toUpperCase(),
+        autista_nome: autistaNome,
+        coordinate_gps: gpsPos || null,
+      },
+    ]);
+
+    if (verbaleErr) {
+      throw new Error(`Foto "${tipoControllo}" caricata ma non registrata nel verbale: ${verbaleErr.message}`);
     }
   };
 
@@ -141,15 +151,14 @@ export default function CheckinPage() {
       if (turnoErr) throw turnoErr;
 
       // Il furgone selezionato diventa automaticamente "in uso" per la durata del turno.
-      const { error: veicoloErr } = await supabase
-        .from('veicoli')
-        .update({ stato: 'in_servizio' })
-        .eq('targa', targa.trim().toUpperCase());
+      // Passa dalla funzione avvia_turno_veicolo (SECURITY DEFINER) che verifica
+      // lato server che chi chiama abbia davvero un turno aperto su questa targa.
+      const { error: veicoloErr } = await supabase.rpc('avvia_turno_veicolo', {
+        p_targa: targa.trim().toUpperCase(),
+      });
 
       if (veicoloErr) {
-        // Non blocchiamo il check-in per questo: il turno è comunque registrato,
-        // ma segnaliamo l'anomalia in console per un controllo successivo.
-        console.error('Errore aggiornamento stato veicolo:', veicoloErr);
+        throw new Error(`Turno registrato, ma stato veicolo non aggiornato: ${veicoloErr.message}`);
       }
 
       // Upload 4 Foto Lati Veicolo con Watermark
@@ -223,18 +232,24 @@ export default function CheckinPage() {
 
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 block">Furgone Selezionato</label>
-              <select
-                value={targa}
-                onChange={(e) => setTarga(e.target.value)}
-                className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
-                required
-              >
-                {veicoli.map((v) => (
-                  <option key={v.targa} value={v.targa}>
-                    {v.targa} — {v.modello || 'Furgone'}
-                  </option>
-                ))}
-              </select>
+              {veicoli.length === 0 ? (
+                <p className="text-xs text-rose-600 font-semibold bg-rose-50 border border-rose-200 rounded-2xl px-4 py-3">
+                  Nessun veicolo disponibile al momento. Contatta un amministratore.
+                </p>
+              ) : (
+                <select
+                  value={targa}
+                  onChange={(e) => setTarga(e.target.value)}
+                  className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                  required
+                >
+                  {veicoli.map((v) => (
+                    <option key={v.targa} value={v.targa}>
+                      {v.targa} — {v.modello || 'Furgone'}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -361,7 +376,7 @@ export default function CheckinPage() {
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || veicoli.length === 0}
             className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded-2xl font-black text-sm tracking-wider uppercase shadow-md flex flex-col items-center justify-center transition-all"
           >
             {submitting ? (

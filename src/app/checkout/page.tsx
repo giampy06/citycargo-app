@@ -69,11 +69,17 @@ export default function CheckoutPage() {
 
       if (error) throw error;
 
-      // Aggiorna anche i km attuali del veicolo nella flotta
-      await supabase
-        .from('veicoli')
-        .update({ km_attuali: kmFineNum, stato: 'disponibile' })
-        .eq('targa', turnoAperto.targa_mezzo);
+      // Aggiorna anche i km attuali del veicolo nella flotta.
+      // Passa dalla funzione chiudi_turno_veicolo (SECURITY DEFINER) che verifica
+      // lato server che esista un turno chiuso corrispondente per questo autista.
+      const { error: veicoloErr } = await supabase.rpc('chiudi_turno_veicolo', {
+        p_targa: turnoAperto.targa_mezzo,
+        p_km_finali: kmFineNum,
+      });
+
+      if (veicoloErr) {
+        throw new Error(`Turno chiuso, ma stato veicolo non aggiornato: ${veicoloErr.message}`);
+      }
 
       alert(`Turno chiuso con successo! Percorsi ${kmPercorsi} km.`);
       router.push('/autista');
