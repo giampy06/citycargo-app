@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   // Protezione: solo Vercel Cron (o chi conosce il CRON_SECRET) può eseguire questo endpoint.
   // Senza questo controllo, chiunque trovi l'URL potrebbe invocarlo manualmente a piacimento.
   const authHeader = req.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ success: false, error: 'Non autorizzato.' }, { status: 401 });
   }
 

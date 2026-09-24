@@ -40,14 +40,38 @@ ma non urgente.
 - Bucket Storage **privati** (non pubblici): `documenti-veicoli`, `fleet-documents`,
   `vehicle-inspections`, `cedolini`. Il codice usa `getPrivateFileUrl(bucket, path)`
   in `src/supabase.ts` per generare link firmati temporanei — i campi `_url` nel
-  database contengono PERCORSI, non link pubblici completi.
+  database DOVREBBERO contenere PERCORSI, non link pubblici completi (ma
+  esistono almeno 2 righe legacy in `documenti_aziendali` con l'URL pubblico
+  completo invece del percorso — bug pre-esistente, non di sicurezza: rende
+  quei 2 documenti semplicemente non apribili, non li espone. Da ripulire.).
 - RLS attiva su tutte le tabelle principali. Modello: funzione `is_admin()`
   (SQL, SECURITY DEFINER) verifica `profili.ruolo = 'admin'`. Un autista vede/
   modifica solo le proprie righe (via `auth.uid() = autista_id` o `= id`), un
-  admin vede/gestisce tutto.
+  admin vede/gestisce tutto. Verificato empiricamente (tentativi reali di IDOR)
+  che `cedolini`, `documenti_aziendali`, `autisti`, `vehicle_expenses` sono
+  ben protette a livello di tabella.
+- Bucket `documenti-veicoli` e `cedolini`: protetti da policy RLS **RESTRICTIVE**
+  su `storage.objects` (aggiunte durante una security review, vedi sotto) — un
+  autista può leggere solo la propria patente (`patenti/<proprio-uuid>_*`), le
+  circolari indirizzate a lui (`documenti-firmati/...`, verificato tramite
+  `documenti_aziendali.file_url`) e il proprio cedolino; tutto il resto è
+  riservato all'admin. Prima di questa fix, qualunque autista autenticato
+  poteva leggere/sovrascrivere i documenti di TUTTI gli altri tramite l'API
+  REST diretta di Supabase Storage, bypassando gli URL firmati — trovato e
+  chiuso il 2026-09-24.
 - Endpoint IA (`/api/analyze-expenses`, `/api/parse-dkv`) richiedono un token
-  di sessione valido (Authorization: Bearer) — non sono pubblici.
-- Endpoint cron (`/api/cron/lunedimattina`) protetto da `CRON_SECRET`.
+  di sessione valido (Authorization: Bearer) **e ora verificano anche che il
+  chiamante sia admin** (`supabase.rpc('is_admin')` con il token dell'utente
+  nell'header) — prima qualsiasi autista autenticato poteva chiamarli.
+  Corretto il 2026-09-24.
+- Endpoint cron (`/api/cron/lunedimattina`) protetto da `CRON_SECRET`, ora con
+  controllo esplicito `!process.env.CRON_SECRET` (fail-closed se la variabile
+  non è impostata, invece di confrontare contro la stringa letterale "Bearer
+  undefined"). Corretto il 2026-09-24.
+- `/api/crea-autista` ora richiede un token admin valido (stesso pattern
+  `is_admin()` via RPC) prima di creare un account autista. Prima non aveva
+  ALCUN controllo — chiunque poteva creare account già "attivi" bypassando
+  l'approvazione. Corretto il 2026-09-24.
 - Variabili sensibili (TELEGRAM_BOT_TOKEN, GEMINI_API_KEY) sono in variabili
   d'ambiente su Vercel, non nel codice.
 

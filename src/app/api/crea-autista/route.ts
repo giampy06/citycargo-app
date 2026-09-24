@@ -1,9 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { supabase } from '@/supabase';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+  // Protezione: crea un account autista già "attivo" (bypassando l'approvazione
+  // manuale), quindi va riservato agli amministratori. Senza questo controllo
+  // chiunque conoscesse l'URL potrebbe creare account non verificati.
+  const authHeader = req.headers.get('authorization') || '';
+  const token = authHeader.replace('Bearer ', '');
+  const supabaseAsCaller = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { global: { headers: { Authorization: `Bearer ${token}` } } }
+  );
+  const { data: userData, error: authError } = await supabaseAsCaller.auth.getUser(token);
+  if (authError || !userData?.user) {
+    return NextResponse.json({ error: 'Non autorizzato.' }, { status: 401 });
+  }
+  const { data: isAdmin, error: adminError } = await supabaseAsCaller.rpc('is_admin');
+  if (adminError || !isAdmin) {
+    return NextResponse.json({ error: 'Accesso riservato agli amministratori.' }, { status: 403 });
+  }
+
   try {
     const {
       email,
