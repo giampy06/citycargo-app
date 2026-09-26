@@ -284,11 +284,11 @@ export default function PermessiZtlPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] pb-24 antialiased font-sans">
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-30 px-4 py-3 sm:px-8">
+      <header className="bg-white border-b border-gray-100 md:sticky md:top-0 z-30 px-4 py-3 sm:px-8">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
-          <div>
-            <h1 className="font-extrabold text-base tracking-tight">Permessi ZTL</h1>
-            <p className="text-[11px] text-gray-400 font-medium">Zone dove i furgoni possono entrare e relative scadenze</p>
+          <div className="min-w-0">
+            <h1 className="font-extrabold text-base tracking-tight truncate">Permessi ZTL</h1>
+            <p className="hidden sm:block text-[11px] text-gray-400 font-medium">Zone dove i furgoni possono entrare e relative scadenze</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -300,9 +300,9 @@ export default function PermessiZtlPage() {
             </button>
             <button
               onClick={apriNuovo}
-              className="h-10 px-4 rounded-2xl bg-[#E05353] hover:bg-[#c94545] text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all"
+              className="h-10 px-4 rounded-2xl bg-[#E05353] hover:bg-[#c94545] text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all whitespace-nowrap"
             >
-              <Plus className="w-4 h-4" /> Nuovo permesso
+              <Plus className="w-4 h-4" /> Nuovo<span className="hidden sm:inline"> permesso</span>
             </button>
           </div>
         </div>
@@ -380,7 +380,45 @@ export default function PermessiZtlPage() {
               {conStato.length === 0 && <p>Premi "Nuovo permesso" per aggiungere il primo.</p>}
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="md:hidden space-y-3">
+              {visibili.map((p) => {
+                const stato = statoPermesso(p.giorni);
+                return (
+                  <div key={p.id} className="rounded-2xl border border-gray-100 p-4 space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="font-mono font-bold text-sm text-[#1E242B]">{p.veicoli?.targa || '—'}</span>
+                        {p.veicoli?.modello && <span className="ml-2 text-[10px] text-gray-400">{p.veicoli.modello}</span>}
+                      </div>
+                      <div className="flex items-center flex-shrink-0">
+                        <button onClick={() => apriModifica(p)} aria-label="Modifica" className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100">
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => setDaEliminare(p)} aria-label="Elimina" className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs">
+                      <span className="font-bold text-gray-800">{p.zona}</span>
+                      <span className="text-gray-500"> — {p.ente}</span>
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className="font-bold">{formatoData(p.data_scadenza)}</span>
+                      <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${stato.classi}`}>{stato.etichetta}</span>
+                    </div>
+                    {p.allegato_url && (
+                      <button onClick={() => apriPdf(p.allegato_url!)} className="inline-flex items-center gap-1 text-xs text-[#E05353] hover:underline font-bold">
+                        <FileText className="w-3.5 h-3.5" /> Apri PDF
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase text-[10px] tracking-wider">
@@ -443,6 +481,7 @@ export default function PermessiZtlPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </section>
       </main>
