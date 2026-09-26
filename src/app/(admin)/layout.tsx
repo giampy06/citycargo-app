@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/supabase';
 import { Loader2 } from 'lucide-react';
@@ -10,15 +10,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const pathname = usePathname();
   const [authChecking, setAuthChecking] = useState(true);
+  // Una volta verificato l'admin, i controlli successivi (cambio pagina, refresh del token)
+  // sono silenziosi: mostrare di nuovo il caricamento smonterebbe la pagina e farebbe
+  // perdere i moduli aperti.
+  const giaAutorizzato = useRef(false);
 
   useEffect(() => {
     let attivo = true;
 
     async function checkAdminAuth() {
-      setAuthChecking(true);
+      if (!giaAutorizzato.current) setAuthChecking(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
+          giaAutorizzato.current = false;
           router.replace('/login');
           return;
         }
@@ -30,13 +35,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           .maybeSingle();
 
         if (profilo?.ruolo !== 'admin') {
+          giaAutorizzato.current = false;
           await supabase.auth.signOut();
           router.replace('/login');
           return;
         }
 
+        giaAutorizzato.current = true;
         if (attivo) setAuthChecking(false);
       } catch (err) {
+        giaAutorizzato.current = false;
         router.replace('/login');
       }
     }
@@ -48,8 +56,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     // passa da una sessione admin a una sessione autista senza un reload
     // completo della pagina, il layout resterebbe "sbloccato" perché
     // React non lo rimonta tra route dello stesso gruppo.
+    // Le chiamate a Supabase vanno rimandate fuori dal callback (setTimeout), altrimenti
+    // getSession() può restare in attesa del lock tenuto durante l'evento e bloccarsi.
     const { data: authListener } = supabase.auth.onAuthStateChange(() => {
-      checkAdminAuth();
+      setTimeout(() => {
+        if (attivo) checkAdminAuth();
+      }, 0);
     });
 
     return () => {
