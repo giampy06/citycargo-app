@@ -13,6 +13,7 @@ import {
   FileSignature,
   FileText,
   BarChart3,
+  MapPin,
   LogOut,
   Menu,
   X,
@@ -21,6 +22,7 @@ import {
 const NAV_ITEMS = [
   { href: '/', label: 'Control Room', icon: LayoutDashboard },
   { href: '/flotta', label: 'Flotta', icon: Truck },
+  { href: '/permessi', label: 'Permessi ZTL', icon: MapPin },
   { href: '/autisti', label: 'Autisti', icon: Users },
   { href: '/presenze', label: 'Presenze', icon: CalendarCheck },
   { href: '/spese', label: 'Spese', icon: Receipt },

@@ -35,6 +35,11 @@ CREATE POLICY "admin_upload_fleet_documents" ON "storage"."objects"
   TO "authenticated"
   WITH CHECK (((bucket_id = 'fleet-documents'::text) AND public.is_admin()));
 
+CREATE POLICY "admin_select_fleet_documents" ON "storage"."objects"
+  FOR SELECT
+  TO "authenticated"
+  USING (((bucket_id = 'fleet-documents'::text) AND public.is_admin()));
+
 CREATE POLICY "autisti_upload_foto_proprio_turno_aperto" ON "storage"."objects"
   FOR INSERT
   TO "authenticated"
