@@ -46,6 +46,10 @@ export async function GET(req: NextRequest) {
     supabase.from('extra_servizi').select('id, data, descrizione, importo').eq('appalto', 'CITI').gte('data', primoGiorno).lte('data', ultimoGiorno),
   ]);
 
+  // Se manca la tabella degli extra un file senza extra avrebbe i totali sbagliati: meglio fermarsi.
+  if (extra.error?.code === 'PGRST205') {
+    return NextResponse.json({ error: 'La tabella degli extra non esiste ancora sul database: esegui prima lo SQL degli extra su Supabase.' }, { status: 500 });
+  }
   const errore = turni.error || autisti.error || tariffe.error || extra.error;
   if (errore) return NextResponse.json({ error: `Lettura dati non riuscita: ${errore.message}` }, { status: 500 });
 
