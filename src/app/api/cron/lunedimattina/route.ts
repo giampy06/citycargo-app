@@ -23,25 +23,31 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, error: errore }, { status: 500 });
   }
 
-  const [resVeicoli, resAutisti] = await Promise.all([
+  const [resVeicoli, resAutisti, resPermessi] = await Promise.all([
     admin.from('veicoli').select('targa, data_scadenza_assicurazione, data_scadenza_revisione'),
     admin
       .from('autisti')
       .select('nome, cognome, scadenza_patente, possiede_cqc, scadenza_cqc, scadenza_visita_medica, scadenza_corso_sicurezza')
       .eq('stato', 'attivo'),
+    admin.from('permessi_ztl').select('zona, ente, data_scadenza, veicoli(targa)'),
   ]);
 
-  if (resVeicoli.error || resAutisti.error) {
-    const errore = resVeicoli.error?.message || resAutisti.error?.message || 'Errore sconosciuto';
+  if (resVeicoli.error || resAutisti.error || resPermessi.error) {
+    const errore = resVeicoli.error?.message || resAutisti.error?.message || resPermessi.error?.message || 'Errore sconosciuto';
     await inviaMessaggioTelegram(`⚠️ *REPORT SETTIMANALE NON ESEGUITO*\n\nNon sono riuscito a leggere i dati: ${errore}`);
     return NextResponse.json({ success: false, error: errore }, { status: 500 });
   }
 
-  const avvisi = costruisciAvvisi(resVeicoli.data ?? [], resAutisti.data ?? [], new Date());
+  const permessi = (resPermessi.data ?? []).map((p: any) => {
+    const veicolo = Array.isArray(p.veicoli) ? p.veicoli[0] : p.veicoli;
+    return { zona: p.zona, ente: p.ente, data_scadenza: p.data_scadenza, targa: veicolo?.targa };
+  });
+
+  const avvisi = costruisciAvvisi(resVeicoli.data ?? [], resAutisti.data ?? [], new Date(), permessi);
 
   let messaggio = '📋 *REPORT SETTIMANALE CITY CARGO*\n\n';
   if (avvisi.length === 0) {
-    messaggio += `🟢 *Tutto ok!* Nessuna scadenza critica o imminente (${resVeicoli.data?.length ?? 0} furgoni e ${resAutisti.data?.length ?? 0} autisti attivi controllati).`;
+    messaggio += `🟢 *Tutto ok!* Nessuna scadenza critica o imminente (${resVeicoli.data?.length ?? 0} furgoni, ${resAutisti.data?.length ?? 0} autisti attivi e ${permessi.length} permessi ZTL controllati).`;
   } else {
     messaggio += '⚠️ *Attenzione, scadenze:*\n\n' + avvisi.join('\n');
   }

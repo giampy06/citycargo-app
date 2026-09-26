@@ -14,8 +14,16 @@ export type AutistaScadenze = {
   scadenza_corso_sicurezza?: string | null;
 };
 
+export type PermessoScadenze = {
+  zona?: string | null;
+  ente?: string | null;
+  data_scadenza?: string | null;
+  targa?: string | null;
+};
+
 const SOGLIA_VEICOLI_GIORNI = 15;
 const SOGLIA_AUTISTI_GIORNI = 30;
+const SOGLIA_PERMESSI_GIORNI = 30;
 
 // Telegram (parse_mode Markdown) si rompe con _ * ` [ nei testi dinamici: li neutralizziamo.
 export function escapeMarkdown(testo: string): string {
@@ -34,10 +42,10 @@ function formatoData(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
-function descrizione(etichetta: string, scadenza: string, giorni: number): string {
+function descrizione(etichetta: string, scadenza: string, giorni: number, scaduto = 'SCADUTA'): string {
   if (giorni < 0) {
     const n = Math.abs(giorni);
-    return `${etichetta}: *SCADUTA* il ${formatoData(scadenza)} (da ${n} ${n === 1 ? 'giorno' : 'giorni'})`;
+    return `${etichetta}: *${scaduto}* il ${formatoData(scadenza)} (da ${n} ${n === 1 ? 'giorno' : 'giorni'})`;
   }
   if (giorni === 0) return `${etichetta}: scade *OGGI* (${formatoData(scadenza)})`;
   return `${etichetta}: scade il ${formatoData(scadenza)} (tra ${giorni} ${giorni === 1 ? 'giorno' : 'giorni'})`;
@@ -47,7 +55,8 @@ function descrizione(etichetta: string, scadenza: string, giorni: number): strin
 export function costruisciAvvisi(
   veicoli: VeicoloScadenze[],
   autisti: AutistaScadenze[],
-  adesso: Date
+  adesso: Date,
+  permessi: PermessoScadenze[] = []
 ): string[] {
   const righe: { giorni: number; testo: string }[] = [];
 
@@ -82,6 +91,16 @@ export function costruisciAvvisi(
         righe.push({ giorni, testo: `👤 Autista *${nome}* — ${descrizione(etichetta, data, giorni)}` });
       }
     }
+  }
+
+  for (const p of permessi) {
+    if (!p.data_scadenza) continue;
+    const giorni = giorniAllaScadenza(p.data_scadenza, adesso);
+    if (giorni > SOGLIA_PERMESSI_GIORNI) continue;
+    const targa = escapeMarkdown(p.targa || 'Mezzo');
+    const zona = escapeMarkdown(p.zona || 'zona non indicata');
+    const ente = p.ente ? ` (${escapeMarkdown(p.ente)})` : '';
+    righe.push({ giorni, testo: `🚐 Furgone *${targa}* — ${descrizione(`Permesso ZTL ${zona}${ente}`, p.data_scadenza, giorni, 'SCADUTO')}` });
   }
 
   return righe.sort((x, y) => x.giorni - y.giorni).map((r) => r.testo);
