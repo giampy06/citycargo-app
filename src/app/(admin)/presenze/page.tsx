@@ -313,6 +313,12 @@ export default function ArchivioPresenzePage() {
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#E05353]' : ''}`} />
             </button>
             <Link
+              href="/presenze/foglio"
+              className="h-10 px-4 rounded-2xl bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-xs flex items-center gap-1.5 transition-colors"
+            >
+              <FileSpreadsheet className="w-4 h-4" /> Foglio mese
+            </Link>
+            <Link
               href="/presenze/tariffe"
               className="h-10 px-4 rounded-2xl bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-xs flex items-center gap-1.5 transition-colors"
             >
