@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/supabase';
+import { scaricaFoglioExcel } from '@/lib/scaricaFoglio';
 import { costruisciFoglio, type TurnoFoglio, type AutistaFoglio, type TariffaFoglio } from '@/lib/foglioPresenze';
 import { ChevronLeft, ChevronRight, Download, Loader2, Plus, X, Edit3, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
@@ -95,24 +96,7 @@ export default function FoglioPresenzePage() {
   const esporta = async () => {
     setEsportazione(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Sessione scaduta: accedi di nuovo.');
-      const res = await fetch(`/api/export-foglio-presenze?anno=${anno}&mese=${mese}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `Errore ${res.status}`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Presenze_CITI_${anno}-${String(mese).padStart(2, '0')}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await scaricaFoglioExcel(anno, mese);
       mostraMessaggio('ok', 'Excel generato.');
     } catch (err: any) {
       mostraMessaggio('errore', `Esportazione non riuscita: ${err.message}`);

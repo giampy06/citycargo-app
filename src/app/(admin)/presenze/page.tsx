@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, getPrivateFileUrl } from '@/supabase';
+import { scaricaFoglioExcel } from '@/lib/scaricaFoglio';
 import {
   Calendar,
   ChevronLeft,
@@ -237,53 +238,17 @@ export default function ArchivioPresenzePage() {
   const totaleRetribuzioniMese = turniDelMese.reduce((acc, t) => acc + (Number(t.compenso_giornaliero) || 0), 0);
   const daControllareMese = turniDelMese.filter((t) => t.da_controllare).length;
 
-  // 4. Esportazione Avanzata Excel (CSV Contabile)
-  const handleExportExcelMensile = () => {
-    if (turniDelMese.length === 0) {
-      alert('Nessun dato di presenza da esportare per questo mese.');
-      return;
+  // 4. Esportazione: foglio presenze CITI in Excel (stesso file della pagina "Foglio mese")
+  const [esportando, setEsportando] = useState(false);
+  const handleExportExcelMensile = async () => {
+    setEsportando(true);
+    try {
+      await scaricaFoglioExcel(currentYear, currentMonth + 1);
+    } catch (err: any) {
+      alert(`Esportazione non riuscita: ${err.message}`);
+    } finally {
+      setEsportando(false);
     }
-
-    const headers = [
-      'Data Servizio',
-      'Codice Verbale',
-      'Nome Autista',
-      'Targa Furgone',
-      'Appalto',
-      'Giro / Linea',
-      'Km Partenza',
-      'Km Rientro',
-      'Km Effettivi',
-      'Importo (€)',
-      'Da Controllare',
-      'Stato Turno'
-    ];
-
-    const rows = turniDelMese.map((t) => [
-      new Date(t.created_at).toLocaleDateString('it-IT'),
-      t.codice_verbale || '',
-      t.nome_autista || 'Autista',
-      t.targa_mezzo || '',
-      t.appalto || '',
-      t.giro || 'Giro Standard',
-      t.km_inizio || '',
-      t.km_fine || '',
-      t.km_percorsi || 0,
-      t.compenso_giornaliero || 0,
-      t.da_controllare ? 'SI' : '',
-      t.stato || ''
-    ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF'
-      + [headers.join(';'), ...rows.map(e => e.join(';'))].join('\n');
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Presenze_CityCargo_${mesiNomi[currentMonth]}_${currentYear}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   return (
@@ -326,9 +291,10 @@ export default function ArchivioPresenzePage() {
             </Link>
             <button 
               onClick={handleExportExcelMensile}
-              className="h-10 px-4 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all"
+              disabled={esportando}
+              className="h-10 px-4 rounded-2xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all"
             >
-              <Download className="w-4 h-4" /> Export Excel Mese
+              {esportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Esporta Excel
             </button>
           </div>
         </div>
