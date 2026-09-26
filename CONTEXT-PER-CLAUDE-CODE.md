@@ -125,6 +125,31 @@ Supabase che si sta usando, non un bug nel codice TypeScript.
   suo. Le RESTRICTIVE policy + il controllo `FOR UPDATE`/disponibilità
   dentro `avvia_turno` chiudono questo buco.
 
+## Monitoraggio e CI (dal 2026-09-26)
+- **Controllo salute giornaliero**: `/api/cron/controllo-salute` (Vercel Cron,
+  `0 6 * * *`, protetto da `CRON_SECRET` come `lunedimattina`). Verifica sito
+  online (`/` e `/login` in produzione) e database raggiungibile (count su
+  `veicoli`), timeout 8s/5s. Manda **sempre** un messaggio Telegram (anche
+  quando tutto è ok), così un silenzio anomalo si nota. Usa l'helper condiviso
+  `src/lib/telegram.ts` — non condiviso con `lunedimattina/route.ts` che resta
+  intoccato di proposito.
+- **⚠️ Bug noto nel cron `lunedimattina` (non ancora corretto)**: interroga
+  `veicoli.scadenza_assicurazione`/`scadenza_revisione` (le colonne reali sono
+  `data_scadenza_assicurazione`/`data_scadenza_revisione`) e interroga
+  `profili` per `scadenza_patente`/`scadenza_visita_medica` (che vivono invece
+  su `autisti`, non su `profili`). Risultato: quel cron probabilmente riporta
+  "tutto ok" a prescindere dalle scadenze reali. Da correggere in un task a
+  parte — deliberatamente non toccato durante l'implementazione del
+  controllo-salute per non introdurre regressioni non richieste.
+- **CI GitHub Actions** (`.github/workflows/ci.yml`): ad ogni push su `main`
+  esegue `npx tsc --noEmit` e `npm run build`. Richiede i secret repo
+  `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` (stessi valori
+  pubblici già in `.env.local`, non sensibili). Notifica di fallimento: solo
+  l'email automatica di GitHub, nessun Telegram dedicato per ora.
+- Report settimanale "Suggerimenti" basato su Gemini: **proposto ma non
+  implementato** (ha un costo API reale, per quanto minimo, rimandato su
+  richiesta esplicita dell'utente).
+
 ## Da fare / da tenere d'occhio
 - Esiste un secondo progetto Vercel duplicato "citycargo-flotta" collegato
   allo stesso repo — è inutilizzato, dà sempre errore di build, andrebbe
