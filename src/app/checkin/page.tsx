@@ -22,7 +22,11 @@ export default function CheckinPage() {
 
   // Dati Turno
   const [targa, setTarga] = useState('');
-  const [appalto, setAppalto] = useState<'CITI' | 'EDF' | 'RHENUS'>('CITI');
+  const [appalto, setAppalto] = useState<'CITI' | 'EDF'>('CITI');
+  const [giri, setGiri] = useState<string[]>([]);
+  const [giroSel, setGiroSel] = useState('');
+  const [errGiri, setErrGiri] = useState<string | null>(null);
+  const [secondoCheckin, setSecondoCheckin] = useState(false);
   const [kmInizio, setKmInizio] = useState('');
   const [noteInizio, setNoteInizio] = useState('');
   const [gpsPos, setGpsPos] = useState<string>('');
@@ -56,6 +60,16 @@ export default function CheckinPage() {
         setTarga(vData[0].targa);
       }
 
+      // Secondo check-in nello stesso giorno (es. servizio extra): niente foto del mezzo.
+      const inizioGiorno = new Date();
+      inizioGiorno.setHours(0, 0, 0, 0);
+      const { count } = await supabase
+        .from('turni_presenze')
+        .select('id', { count: 'exact', head: true })
+        .eq('autista_id', session.user.id)
+        .gte('created_at', inizioGiorno.toISOString());
+      setSecondoCheckin((count ?? 0) > 0);
+
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => setGpsPos(`${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`),
@@ -66,6 +80,32 @@ export default function CheckinPage() {
     }
     init();
   }, [router]);
+
+  useEffect(() => {
+    if (appalto !== 'CITI') {
+      setGiri([]);
+      setGiroSel('');
+      setErrGiri(null);
+      return;
+    }
+    let attivo = true;
+    (async () => {
+      const { data, error } = await supabase.rpc('elenco_giri', { p_appalto: 'CITI' });
+      if (!attivo) return;
+      if (error) {
+        setErrGiri(`Impossibile caricare i giri: ${error.message}`);
+        setGiri([]);
+        return;
+      }
+      const nomi = ((data as { nome: string }[]) || []).map((g) => g.nome);
+      setErrGiri(nomi.length === 0 ? 'Nessun giro configurato. Contatta un amministratore.' : null);
+      setGiri(nomi);
+      setGiroSel(secondoCheckin && nomi.includes('Extra') ? 'Extra' : '');
+    })();
+    return () => {
+      attivo = false;
+    };
+  }, [appalto, secondoCheckin]);
 
   const uploadFotoCertificata = async (
     file: File, 
@@ -120,7 +160,12 @@ export default function CheckinPage() {
       return;
     }
 
-    if (!fotoFrontale || !fotoRetro || !fotoLatoSx || !fotoLatoDx) {
+    if (appalto === 'CITI' && !giroSel) {
+      setErrorMsg('Seleziona il giro di oggi.');
+      return;
+    }
+
+    if (!secondoCheckin && (!fotoFrontale || !fotoRetro || !fotoLatoSx || !fotoLatoDx)) {
       setErrorMsg('Scatta tutte le 4 foto dei lati del veicolo per procedere.');
       return;
     }
@@ -143,24 +188,31 @@ export default function CheckinPage() {
           p_codice_verbale: codiceVerbale,
           p_nome_autista: autistaNome,
           p_note_inizio: noteInizio || null,
+          p_giro: appalto === 'CITI' ? giroSel : null,
         })
         .single();
 
       if (turnoErr) throw new Error(`Impossibile avviare il turno: ${turnoErr.message}`);
       const turno = data as { id: string };
 
+      if (secondoCheckin) {
+        alert(`Check-in registrato con successo!\nVerbale: ${codiceVerbale}`);
+        window.location.href = '/autista';
+        return;
+      }
+
       // Upload 4 Foto Lati Veicolo con Watermark
       setUploadProgressText('Timbro e invio Lato Frontale (1/4)...');
-      await uploadFotoCertificata(fotoFrontale, 'Frontale', 'frontale', turno.id, codiceVerbale, autistaNome);
+      await uploadFotoCertificata(fotoFrontale!, 'Frontale', 'frontale', turno.id, codiceVerbale, autistaNome);
 
       setUploadProgressText('Timbro e invio Lato Posteriore (2/4)...');
-      await uploadFotoCertificata(fotoRetro, 'Retro', 'retro', turno.id, codiceVerbale, autistaNome);
+      await uploadFotoCertificata(fotoRetro!, 'Retro', 'retro', turno.id, codiceVerbale, autistaNome);
 
       setUploadProgressText('Timbro e invio Fiancata Sinistra (3/4)...');
-      await uploadFotoCertificata(fotoLatoSx, 'Fiancata Sinistra', 'lato_sx', turno.id, codiceVerbale, autistaNome);
+      await uploadFotoCertificata(fotoLatoSx!, 'Fiancata Sinistra', 'lato_sx', turno.id, codiceVerbale, autistaNome);
 
       setUploadProgressText('Timbro e invio Fiancata Destra (4/4)...');
-      await uploadFotoCertificata(fotoLatoDx, 'Fiancata Destra', 'lato_dx', turno.id, codiceVerbale, autistaNome);
+      await uploadFotoCertificata(fotoLatoDx!, 'Fiancata Destra', 'lato_dx', turno.id, codiceVerbale, autistaNome);
 
       alert(`Check-in registrato con successo!\n4 Foto certificate archiviate.\nVerbale: ${codiceVerbale}`);
       window.location.href = '/autista';
@@ -215,7 +267,7 @@ export default function CheckinPage() {
           {/* Sezione Mezzo e Km */}
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
-              1. Mezzo, Appalto e Chilometri
+              1. Mezzo, Appalto, Giro e Chilometri
             </label>
 
             <div>
@@ -250,7 +302,6 @@ export default function CheckinPage() {
                 >
                   <option value="CITI">CITI</option>
                   <option value="EDF">EDF</option>
-                  <option value="RHENUS">RHENUS</option>
                 </select>
               </div>
 
@@ -266,9 +317,37 @@ export default function CheckinPage() {
                 />
               </div>
             </div>
+
+            {appalto === 'CITI' && (
+              <div>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">Giro di oggi</label>
+                {errGiri ? (
+                  <p className="text-xs text-rose-600 font-semibold bg-rose-50 border border-rose-200 rounded-2xl px-4 py-3">{errGiri}</p>
+                ) : (
+                  <select
+                    value={giroSel}
+                    onChange={(e) => setGiroSel(e.target.value)}
+                    className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                    required
+                  >
+                    <option value="">Seleziona il giro...</option>
+                    {giri.map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
           </div>
 
+          {secondoCheckin && (
+            <div className="bg-amber-50 border border-amber-200 rounded-3xl p-4 text-xs text-amber-800 font-semibold">
+              Secondo check-in di oggi: non servono le foto del mezzo.
+            </div>
+          )}
+
           {/* Sezione 4 Foto Lati Veicolo */}
+          {!secondoCheckin && (
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
@@ -347,11 +426,12 @@ export default function CheckinPage() {
               </label>
             </div>
           </div>
+          )}
 
           {/* Note & Segnalazioni */}
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-2">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
-              3. Segnalazione Danni o Anomalie (Opzionale)
+              {secondoCheckin ? '2' : '3'}. Segnalazione Danni o Anomalie (Opzionale)
             </label>
             <textarea
               rows={2}
@@ -364,7 +444,7 @@ export default function CheckinPage() {
 
           <button
             type="submit"
-            disabled={submitting || veicoli.length === 0}
+            disabled={submitting || veicoli.length === 0 || (appalto === 'CITI' && !!errGiri)}
             className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded-2xl font-black text-sm tracking-wider uppercase shadow-md flex flex-col items-center justify-center transition-all"
           >
             {submitting ? (
@@ -375,7 +455,7 @@ export default function CheckinPage() {
             ) : (
               <span className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5" />
-                Certifica 4 Lati & Inizia Turno
+                {secondoCheckin ? 'Inizia Turno' : 'Certifica 4 Lati & Inizia Turno'}
               </span>
             )}
           </button>

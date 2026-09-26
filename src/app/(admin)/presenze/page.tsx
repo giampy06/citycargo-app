@@ -39,6 +39,10 @@ export default function ArchivioPresenzePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTarga, setEditTarga] = useState('');
   const [editKmFine, setEditKmFine] = useState('');
+  const [editGiro, setEditGiro] = useState('');
+  const [editImporto, setEditImporto] = useState('');
+  const [editDaControllare, setEditDaControllare] = useState(false);
+  const [tariffe, setTariffe] = useState<{ nome: string; importo: number | null; appalto: string }[]>([]);
 
   // Ispezione verbale fotografico
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
@@ -64,6 +68,10 @@ export default function ArchivioPresenzePage() {
 
       if (error) throw error;
       setTurni(data || []);
+
+      // Tariffe per correggere giro/importo (se la tabella non c'è ancora, la pagina funziona lo stesso).
+      const tRes = await supabase.from('tariffe_giri').select('nome, importo, appalto').eq('attivo', true).order('ordine');
+      setTariffe(tRes.error ? [] : (tRes.data as any[]) || []);
     } catch (err: any) {
       console.error('Errore recupero presenze:', err);
     } finally {
@@ -114,10 +122,19 @@ export default function ArchivioPresenzePage() {
       return;
     }
 
+    const importoNum = Number(editImporto.replace(',', '.'));
+    if (editImporto.trim() === '' || isNaN(importoNum) || importoNum < 0) {
+      alert('Inserisci un importo valido (0 o superiore).');
+      return;
+    }
+
     try {
       const payload: any = {
         targa_mezzo: editTarga.trim().toUpperCase(),
+        compenso_giornaliero: importoNum,
+        da_controllare: editDaControllare,
       };
+      if (editGiro.trim()) payload.giro = editGiro.trim();
 
       if (kmNum !== null) {
         payload.km_fine = kmNum;
@@ -218,6 +235,7 @@ export default function ArchivioPresenzePage() {
   const totalePresenzeMese = turniDelMese.length;
   const totaleKmMese = turniDelMese.reduce((acc, t) => acc + (Number(t.km_percorsi) || 0), 0);
   const totaleRetribuzioniMese = turniDelMese.reduce((acc, t) => acc + (Number(t.compenso_giornaliero) || 0), 0);
+  const daControllareMese = turniDelMese.filter((t) => t.da_controllare).length;
 
   // 4. Esportazione Avanzata Excel (CSV Contabile)
   const handleExportExcelMensile = () => {
@@ -236,7 +254,8 @@ export default function ArchivioPresenzePage() {
       'Km Partenza',
       'Km Rientro',
       'Km Effettivi',
-      'Compenso Lordo (€)',
+      'Importo (€)',
+      'Da Controllare',
       'Stato Turno'
     ];
 
@@ -251,6 +270,7 @@ export default function ArchivioPresenzePage() {
       t.km_fine || '',
       t.km_percorsi || 0,
       t.compenso_giornaliero || 0,
+      t.da_controllare ? 'SI' : '',
       t.stato || ''
     ]);
 
@@ -281,7 +301,7 @@ export default function ArchivioPresenzePage() {
             </button>
             <div>
               <h1 className="font-extrabold text-base tracking-tight">Archivio Presenze & Quaderno Giornaliero</h1>
-              <p className="text-[11px] text-gray-400 font-medium">Riepilogo Autisti, Giri, Chilometri e Retribuzioni</p>
+              <p className="text-[11px] text-gray-400 font-medium">Riepilogo Autisti, Giri, Chilometri e Importi</p>
             </div>
           </div>
 
@@ -292,6 +312,12 @@ export default function ArchivioPresenzePage() {
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#E05353]' : ''}`} />
             </button>
+            <Link
+              href="/presenze/tariffe"
+              className="h-10 px-4 rounded-2xl bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-xs flex items-center gap-1.5 transition-colors"
+            >
+              <Euro className="w-4 h-4" /> Tariffe
+            </Link>
             <button 
               onClick={handleExportExcelMensile}
               className="h-10 px-4 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all"
@@ -340,9 +366,11 @@ export default function ArchivioPresenzePage() {
           </div>
 
           <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block">Monte Retribuzioni / Compensi</span>
+            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block">Importi Maturati</span>
             <div className="text-2xl font-black text-[#1E242B] mt-1">€ {totaleRetribuzioniMese.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</div>
-            <span className="text-[11px] text-slate-500 font-medium mt-0.5 block">Totale maturato per i giri</span>
+            <span className={`text-[11px] font-medium mt-0.5 block ${daControllareMese > 0 ? 'text-rose-600 font-bold' : 'text-slate-500'}`}>
+              {daControllareMese > 0 ? `${daControllareMese} da controllare` : 'Totale maturato per i giri'}
+            </span>
           </div>
         </div>
 
@@ -390,7 +418,7 @@ export default function ArchivioPresenzePage() {
                   <div className="flex items-center gap-3 text-xs font-semibold text-gray-600">
                     <span>Km Giorno: <b className="text-[#1E242B]">+{gruppo.totaleKm} km</b></span>
                     {gruppo.totaleCompensi > 0 && (
-                      <span>Compensi: <b className="text-emerald-600">€ {gruppo.totaleCompensi.toFixed(2)}</b></span>
+                      <span>Importi: <b className="text-emerald-600">€ {gruppo.totaleCompensi.toFixed(2)}</b></span>
                     )}
                   </div>
                 </div>
@@ -405,7 +433,7 @@ export default function ArchivioPresenzePage() {
                         <th className="pb-2.5">Appalto & Giro</th>
                         <th className="pb-2.5">Km Inizio / Fine</th>
                         <th className="pb-2.5">Percorsi</th>
-                        <th className="pb-2.5">Compenso</th>
+                        <th className="pb-2.5">Importo</th>
                         <th className="pb-2.5">Stato</th>
                         <th className="pb-2.5 text-right">Azioni</th>
                       </tr>
@@ -430,9 +458,29 @@ export default function ArchivioPresenzePage() {
                           </td>
                           <td className="py-3">
                             <span className="font-bold text-gray-700 mr-2">{t.appalto}</span>
-                            <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md">
-                              {t.giro || 'Giro Standard'}
-                            </span>
+                            {editingId === t.id && t.appalto === 'CITI' && tariffe.some((x) => x.appalto === 'CITI') ? (
+                              <select
+                                value={editGiro}
+                                onChange={(e) => {
+                                  setEditGiro(e.target.value);
+                                  const tar = tariffe.find((x) => x.appalto === 'CITI' && x.nome === e.target.value);
+                                  if (tar) {
+                                    if (tar.importo !== null) setEditImporto(String(tar.importo));
+                                    setEditDaControllare(tar.importo === null);
+                                  }
+                                }}
+                                className="px-2 py-1 bg-white border border-gray-300 rounded text-[11px] font-bold"
+                              >
+                                {!tariffe.some((x) => x.appalto === 'CITI' && x.nome === editGiro) && <option value={editGiro}>{editGiro || 'Giro Standard'}</option>}
+                                {tariffe.filter((x) => x.appalto === 'CITI').map((x) => (
+                                  <option key={x.nome} value={x.nome}>{x.nome}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md">
+                                {t.giro || 'Giro Standard'}
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 text-gray-500">
                             {editingId === t.id ? (
@@ -456,7 +504,31 @@ export default function ArchivioPresenzePage() {
                             {t.km_percorsi ? `+${t.km_percorsi} km` : '—'}
                           </td>
                           <td className="py-3 font-bold text-gray-800">
-                            {t.compenso_giornaliero ? `€ ${Number(t.compenso_giornaliero).toFixed(2)}` : '—'}
+                            {editingId === t.id ? (
+                              <div className="space-y-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={editImporto}
+                                  onChange={(e) => setEditImporto(e.target.value)}
+                                  className="w-24 px-2 py-1 bg-white border border-gray-300 rounded text-xs font-bold"
+                                />
+                                <label className="flex items-center gap-1 text-[10px] font-semibold text-rose-600 cursor-pointer">
+                                  <input type="checkbox" checked={editDaControllare} onChange={(e) => setEditDaControllare(e.target.checked)} />
+                                  Da controllare
+                                </label>
+                              </div>
+                            ) : (
+                              <>
+                                {t.compenso_giornaliero ? `€ ${Number(t.compenso_giornaliero).toFixed(2)}` : '—'}
+                                {t.da_controllare && (
+                                  <span className="ml-1.5 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold whitespace-nowrap">
+                                    Da controllare
+                                  </span>
+                                )}
+                              </>
+                            )}
                           </td>
                           <td className="py-3">
                             {t.stato === 'aperto' ? (
@@ -499,9 +571,12 @@ export default function ArchivioPresenzePage() {
                                     setEditingId(t.id);
                                     setEditTarga(t.targa_mezzo || '');
                                     setEditKmFine(t.km_fine?.toString() || '');
+                                    setEditGiro(t.giro || '');
+                                    setEditImporto(String(t.compenso_giornaliero ?? 0));
+                                    setEditDaControllare(!!t.da_controllare);
                                   }}
                                   className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                                  title="Modifica Targa o Km"
+                                  title="Modifica targa, km, giro o importo"
                                 >
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </button>

@@ -19,6 +19,7 @@ CREATE TABLE "public"."turni_presenze" (
   "autista_id"           uuid,
   "nome_autista"         text,
   "km_percorsi"          numeric                  DEFAULT 0,
+  "da_controllare"       boolean                  NOT NULL DEFAULT false,
   CONSTRAINT "turni_presenze_appalto_check" CHECK ((appalto = ANY (ARRAY['CITI'::text, 'EDF'::text, 'RHENUS'::text]))),
   CONSTRAINT "turni_presenze_autista_id_fkey" FOREIGN KEY (autista_id) REFERENCES auth.users(id),
   CONSTRAINT "turni_presenze_codice_verbale_key" UNIQUE (codice_verbale),
