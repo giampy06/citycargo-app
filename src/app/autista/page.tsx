@@ -17,8 +17,7 @@ import {
   X,
   Banknote,
   Download,
-  ChevronRight,
-  Euro
+  ChevronRight
 } from 'lucide-react';
 
 export default function AppAutistaDashboard() {
@@ -35,11 +34,6 @@ export default function AppAutistaDashboard() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [signing, setSigning] = useState(false);
-
-  // Calcolo Compenso (Es. 0.15€ al km)
-  const TARIFFA_KM = 0.15;
-  const kmTotali = mieiTurni.reduce((acc, t) => acc + (Number(t.km_percorsi) || 0), 0);
-  const compensoStimato = kmTotali * TARIFFA_KM;
 
   useEffect(() => {
     async function initAuthAndData() {
@@ -214,18 +208,6 @@ export default function AppAutistaDashboard() {
           </div>
         ) : (
           <>
-            {/* BOX COMPENSO MATURATO */}
-            <div className="bg-[#1E242B] text-white rounded-3xl p-6 shadow-xl shadow-black/10 flex items-center justify-between">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Compenso Maturato Stimato</span>
-                <div className="text-2xl font-black mt-1">€ {compensoStimato.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</div>
-                <div className="text-[10px] text-gray-400 mt-0.5">Basato su {kmTotali} km percorsi</div>
-              </div>
-              <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-sm">
-                <Euro className="w-6 h-6 text-emerald-400" />
-              </div>
-            </div>
-
             {/* BOX 1: GESTIONE TURNO */}
             <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
               <div className="flex items-center justify-between">

@@ -1,3 +1,9 @@
+-- Rimuove il compenso fisso di 85 EUR scritto automaticamente alla chiusura di ogni turno
+-- (valore inventato, non basato sulle regole reali). Da questo momento compenso_giornaliero
+-- resta al valore di default (0) finche' non esistono le tariffe reali (foglio presenze).
+-- I turni gia' chiusi mantengono il valore 85 salvato in passato (dati di test).
+-- Da eseguire manualmente nell'SQL Editor di Supabase. Ri-eseguibile senza rischi.
+
 CREATE OR REPLACE FUNCTION public.chiudi_turno (
   p_turno_id  uuid,
   p_km_finali numeric
