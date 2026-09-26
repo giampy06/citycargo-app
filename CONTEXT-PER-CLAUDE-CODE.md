@@ -138,6 +138,39 @@ Supabase che si sta usando, non un bug nel codice TypeScript.
   suo. Le RESTRICTIVE policy + il controllo `FOR UPDATE`/disponibilità
   dentro `avvia_turno` chiudono questo buco.
 
+## Monitoraggio e CI (dal 2026-09-26)
+- **Controllo salute giornaliero**: `/api/cron/controllo-salute` (Vercel Cron,
+  `0 6 * * *`, protetto da `CRON_SECRET` come `lunedimattina`). Verifica sito
+  online (`/` e `/login` in produzione) e database raggiungibile (count su
+  `veicoli`), timeout 8s/5s. Manda **sempre** un messaggio Telegram (anche
+  quando tutto è ok), così un silenzio anomalo si nota. Usa l'helper condiviso
+  `src/lib/telegram.ts` — non condiviso con `lunedimattina/route.ts` che resta
+  intoccato di proposito.
+- **Cron `lunedimattina` (corretto il 2026-09-26)**: prima leggeva colonne
+  inesistenti (`veicoli.scadenza_*` invece di `data_scadenza_*`) e la tabella
+  sbagliata (`profili` invece di `autisti`), e in più girava con la chiave
+  pubblica senza login, quindi la RLS gli mostrava 0 righe: riportava sempre
+  "tutto ok". Ora usa `SUPABASE_SERVICE_ROLE_KEY` (solo server, variabile
+  Vercel, MAI con prefisso NEXT_PUBLIC_) tramite `src/lib/supabaseAdmin.ts`, la
+  logica sta in `src/lib/scadenze.ts`, e se non riesce a leggere i dati manda
+  un avviso di errore invece di "tutto ok". Controlla veicoli (assicurazione,
+  revisione: soglia 15 gg) e autisti attivi (patente, visita medica, corso
+  sicurezza, CQC se posseduta: soglia 30 gg), incluse le scadenze già passate.
+- **Compensi**: il compenso fisso di 85 € in `chiudi_turno` e la stima 0,15
+  €/km nella dashboard autista erano valori inventati (non basati su regole
+  reali) e sono stati rimossi. L'unica fonte valida è il foglio "Presenze"
+  (PDF di agosto 2026): importo giornaliero per lettera di servizio (P 185,
+  E 215, S 255, B 255, N 220, J 235, C 235, L 255, D 215), assegnata la sera
+  dal capo in base al servizio svolto. Da implementare.
+- **CI GitHub Actions** (`.github/workflows/ci.yml`): ad ogni push su `main`
+  esegue `npx tsc --noEmit` e `npm run build`. Richiede i secret repo
+  `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` (stessi valori
+  pubblici già in `.env.local`, non sensibili). Notifica di fallimento: solo
+  l'email automatica di GitHub, nessun Telegram dedicato per ora.
+- Report settimanale "Suggerimenti" basato su Gemini: **proposto ma non
+  implementato** (ha un costo API reale, per quanto minimo, rimandato su
+  richiesta esplicita dell'utente).
+
 ## Da fare / da tenere d'occhio
 - Esiste un secondo progetto Vercel duplicato "citycargo-flotta" collegato
   allo stesso repo — è inutilizzato, dà sempre errore di build, andrebbe

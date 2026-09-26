@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { inviaMessaggioTelegram } from '@/lib/telegram';
+import { costruisciAvvisi } from '@/lib/scadenze';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,80 +13,49 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Non autorizzato.' }, { status: 401 });
   }
 
-  try {
-    const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-    const CHAT_ID_ADMIN = process.env.TELEGRAM_CHAT_ID_ADMIN;
-
-    if (!TELEGRAM_BOT_TOKEN || !CHAT_ID_ADMIN) {
-      return NextResponse.json(
-        { success: false, error: 'Variabili TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID_ADMIN mancanti.' },
-        { status: 500 }
-      );
-    }
-
-    // Recupero dati sicuro con blocchi separati
-    let veicoli: any[] = [];
-    let autisti: any[] = [];
-
-    const resVeicoli = await supabase.from('veicoli').select('*');
-    if (!resVeicoli.error && resVeicoli.data) {
-      veicoli = resVeicoli.data;
-    }
-
-    const resAutisti = await supabase.from('profili').select('*');
-    if (!resAutisti.error && resAutisti.data) {
-      autisti = resAutisti.data;
-    }
-
-    const oggi = new Date();
-    let avvisi: string[] = [];
-
-    // Controllo veicoli
-    veicoli.forEach((v: any) => {
-      const targa = v.targa || 'Mezzo';
-      if (v.scadenza_assicurazione) {
-        const diff = Math.ceil((new Date(v.scadenza_assicurazione).getTime() - oggi.getTime()) / (1000 * 60 * 60 * 24));
-        if (diff <= 15) avvisi.push(`🚐 Furgone *${targa}*: Assicurazione in scadenza il ${v.scadenza_assicurazione}`);
-      }
-      if (v.scadenza_revisione) {
-        const diff = Math.ceil((new Date(v.scadenza_revisione).getTime() - oggi.getTime()) / (1000 * 60 * 60 * 24));
-        if (diff <= 15) avvisi.push(`🚐 Furgone *${targa}*: Revisione in scadenza il ${v.scadenza_revisione}`);
-      }
-    });
-
-    // Controllo autisti
-    autisti.forEach((a: any) => {
-      const nome = `${a.nome || ''} ${a.cognome || ''}`.trim() || 'Autista';
-      if (a.scadenza_patente) {
-        const diff = Math.ceil((new Date(a.scadenza_patente).getTime() - oggi.getTime()) / (1000 * 60 * 60 * 24));
-        if (diff <= 30) avvisi.push(`👤 Autista *${nome}*: Patente in scadenza il ${a.scadenza_patente}`);
-      }
-      if (a.scadenza_visita_medica) {
-        const diff = Math.ceil((new Date(a.scadenza_visita_medica).getTime() - oggi.getTime()) / (1000 * 60 * 60 * 24));
-        if (diff <= 30) avvisi.push(`👤 Autista *${nome}*: Visita medica in scadenza il ${a.scadenza_visita_medica}`);
-      }
-    });
-
-    let messaggio = "📋 *REPORT SETTIMANALE CITY CARGO*\n\n";
-    if (avvisi.length === 0) {
-      messaggio += "🟢 *Tutto ok!* Nessuna scadenza critica o imminente da segnalare per questa settimana.";
-    } else {
-      messaggio += "⚠️ *Attenzione, scadenze in arrivo:*\n\n" + avvisi.join('\n');
-    }
-
-    // Invio a Telegram
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: CHAT_ID_ADMIN,
-        text: messaggio,
-        parse_mode: 'Markdown',
-      }),
-    });
-
-    return NextResponse.json({ success: true, message: 'Report elaborato e inviato correttamente!' });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  // Il cron gira senza utente loggato: le regole RLS mostrerebbero 0 righe alla chiave
+  // pubblica, quindi serve la chiave server (service_role). Mai dire "tutto ok" se non
+  // siamo riusciti a leggere i dati: un report falsamente rassicurante è peggio di nessun report.
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    const errore = 'Manca SUPABASE_SERVICE_ROLE_KEY: il report scadenze non può leggere i dati.';
+    await inviaMessaggioTelegram(`⚠️ *REPORT SETTIMANALE NON ESEGUITO*\n\n${errore}`);
+    return NextResponse.json({ success: false, error: errore }, { status: 500 });
   }
+
+  const [resVeicoli, resAutisti, resPermessi] = await Promise.all([
+    admin.from('veicoli').select('targa, data_scadenza_assicurazione, data_scadenza_revisione'),
+    admin
+      .from('autisti')
+      .select('nome, cognome, scadenza_patente, possiede_cqc, scadenza_cqc, scadenza_visita_medica, scadenza_corso_sicurezza')
+      .eq('stato', 'attivo'),
+    admin.from('permessi_ztl').select('zona, ente, data_scadenza, veicoli(targa)'),
+  ]);
+
+  if (resVeicoli.error || resAutisti.error || resPermessi.error) {
+    const errore = resVeicoli.error?.message || resAutisti.error?.message || resPermessi.error?.message || 'Errore sconosciuto';
+    await inviaMessaggioTelegram(`⚠️ *REPORT SETTIMANALE NON ESEGUITO*\n\nNon sono riuscito a leggere i dati: ${errore}`);
+    return NextResponse.json({ success: false, error: errore }, { status: 500 });
+  }
+
+  const permessi = (resPermessi.data ?? []).map((p: any) => {
+    const veicolo = Array.isArray(p.veicoli) ? p.veicoli[0] : p.veicoli;
+    return { zona: p.zona, ente: p.ente, data_scadenza: p.data_scadenza, targa: veicolo?.targa };
+  });
+
+  const avvisi = costruisciAvvisi(resVeicoli.data ?? [], resAutisti.data ?? [], new Date(), permessi);
+
+  let messaggio = '📋 *REPORT SETTIMANALE CITY CARGO*\n\n';
+  if (avvisi.length === 0) {
+    messaggio += `🟢 *Tutto ok!* Nessuna scadenza critica o imminente (${resVeicoli.data?.length ?? 0} furgoni, ${resAutisti.data?.length ?? 0} autisti attivi e ${permessi.length} permessi ZTL controllati).`;
+  } else {
+    messaggio += '⚠️ *Attenzione, scadenze:*\n\n' + avvisi.join('\n');
+  }
+
+  const telegram = await inviaMessaggioTelegram(messaggio);
+  if (!telegram.ok) {
+    return NextResponse.json({ success: false, error: telegram.error }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true, message: 'Report elaborato e inviato correttamente!', avvisi: avvisi.length });
 }
