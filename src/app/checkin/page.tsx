@@ -167,11 +167,6 @@ export default function CheckinPage() {
       return;
     }
 
-    if (!secondoCheckin && (!fotoFrontale || !fotoRetro || !fotoLatoSx || !fotoLatoDx)) {
-      setErrorMsg('Scatta tutte le 4 foto dei lati del veicolo per procedere.');
-      return;
-    }
-
     setSubmitting(true);
     const autistaNome = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Autista';
     const codiceVerbale = `CHK-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
@@ -203,20 +198,24 @@ export default function CheckinPage() {
         return;
       }
 
-      // Upload 4 Foto Lati Veicolo con Watermark
-      setUploadProgressText('Timbro e invio Lato Frontale (1/4)...');
-      await uploadFotoCertificata(fotoFrontale!, 'Frontale', 'frontale', turno.id, codiceVerbale, autistaNome);
+      // Le foto sono facoltative: carichiamo solo quelle che l'autista ha effettivamente scattato.
+      const fotoDaCaricare = [
+        fotoFrontale && { file: fotoFrontale, tipoControllo: 'Lato Frontale', tipoFoto: 'frontale' },
+        fotoRetro && { file: fotoRetro, tipoControllo: 'Lato Posteriore', tipoFoto: 'retro' },
+        fotoLatoSx && { file: fotoLatoSx, tipoControllo: 'Fiancata Sinistra', tipoFoto: 'lato_sx' },
+        fotoLatoDx && { file: fotoLatoDx, tipoControllo: 'Fiancata Destra', tipoFoto: 'lato_dx' },
+      ].filter((f): f is { file: File; tipoControllo: string; tipoFoto: string } => !!f);
 
-      setUploadProgressText('Timbro e invio Lato Posteriore (2/4)...');
-      await uploadFotoCertificata(fotoRetro!, 'Retro', 'retro', turno.id, codiceVerbale, autistaNome);
+      for (let i = 0; i < fotoDaCaricare.length; i++) {
+        const f = fotoDaCaricare[i];
+        setUploadProgressText(`Timbro e invio ${f.tipoControllo} (${i + 1}/${fotoDaCaricare.length})...`);
+        await uploadFotoCertificata(f.file, f.tipoControllo, f.tipoFoto, turno.id, codiceVerbale, autistaNome);
+      }
 
-      setUploadProgressText('Timbro e invio Fiancata Sinistra (3/4)...');
-      await uploadFotoCertificata(fotoLatoSx!, 'Fiancata Sinistra', 'lato_sx', turno.id, codiceVerbale, autistaNome);
-
-      setUploadProgressText('Timbro e invio Fiancata Destra (4/4)...');
-      await uploadFotoCertificata(fotoLatoDx!, 'Fiancata Destra', 'lato_dx', turno.id, codiceVerbale, autistaNome);
-
-      toast(`Check-in registrato con successo!\n4 Foto certificate archiviate.\nVerbale: ${codiceVerbale}`, 'success');
+      const notaFoto = fotoDaCaricare.length > 0
+        ? `${fotoDaCaricare.length} foto certificate archiviate.`
+        : 'Nessuna foto allegata.';
+      toast(`Check-in registrato con successo!\n${notaFoto}\nVerbale: ${codiceVerbale}`, 'success');
       window.location.href = '/autista';
     } catch (err: any) {
       console.error(err);
@@ -250,7 +249,7 @@ export default function CheckinPage() {
           </Link>
           <div className="text-center">
             <h1 className="font-extrabold text-sm uppercase tracking-wider">Inizio Turno (Check-in)</h1>
-            <p className="text-[11px] text-gray-400 font-medium">Controllo 4 Lati Veicolo & Km</p>
+            <p className="text-[11px] text-gray-400 font-medium">Km e foto veicolo (facoltative)</p>
           </div>
           <div className="w-10 h-10" />
         </div>
@@ -353,14 +352,17 @@ export default function CheckinPage() {
           <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
-                2. Perizia Fotografica (4 Lati)
+                2. Perizia Fotografica (facoltativa)
               </label>
               <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
-                fotoCompletate === 4 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                fotoCompletate === 4 ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'
               }`}>
                 {fotoCompletate}/4 Foto Scattate
               </span>
             </div>
+            <p className="text-[11px] text-gray-400 -mt-2">
+              Consigliata per la tua tutela in caso di danni contestati, ma non obbligatoria per iniziare il turno.
+            </p>
 
             <div className="grid grid-cols-2 gap-3">
               {/* Foto 1: Frontale */}
@@ -457,7 +459,9 @@ export default function CheckinPage() {
             ) : (
               <span className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5" />
-                {secondoCheckin ? 'Inizia Turno' : 'Certifica 4 Lati & Inizia Turno'}
+                {secondoCheckin || fotoCompletate === 0
+                  ? 'Inizia Turno'
+                  : `Certifica ${fotoCompletate} Lat${fotoCompletate === 1 ? 'o' : 'i'} & Inizia Turno`}
               </span>
             )}
           </button>
