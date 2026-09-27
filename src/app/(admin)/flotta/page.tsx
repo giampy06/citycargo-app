@@ -39,6 +39,11 @@ export default function FlottaPage() {
   const [editNote, setEditNote] = useState('');
   const [editAssicurazione, setEditAssicurazione] = useState('');
   const [editRevisione, setEditRevisione] = useState('');
+  const [editIntestazione, setEditIntestazione] = useState('');
+  const [editAnno, setEditAnno] = useState('');
+  const [editCategoria, setEditCategoria] = useState('');
+  const [editAlimentazione, setEditAlimentazione] = useState('');
+  const [editResponsabile, setEditResponsabile] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Storico Costi Mezzo Corrente nella Modale
@@ -90,6 +95,11 @@ export default function FlottaPage() {
     setEditNote(veicolo.note || '');
     setEditAssicurazione(veicolo.data_scadenza_assicurazione || '');
     setEditRevisione(veicolo.data_scadenza_revisione || '');
+    setEditIntestazione(veicolo.intestazione || '');
+    setEditAnno(veicolo.anno?.toString() || '');
+    setEditCategoria(veicolo.categoria || '');
+    setEditAlimentazione(veicolo.alimentazione || '');
+    setEditResponsabile(veicolo.responsabile || '');
 
     // Recupera spese/fatture specifiche per questa targa
     setLoadingSpese(true);
@@ -169,6 +179,11 @@ export default function FlottaPage() {
           note: editNote.trim() || null,
           data_scadenza_assicurazione: editAssicurazione || null,
           data_scadenza_revisione: editRevisione || null,
+          intestazione: editIntestazione.trim() || null,
+          anno: editAnno ? Number(editAnno) : null,
+          categoria: editCategoria.trim() || null,
+          alimentazione: editAlimentazione.trim() || null,
+          responsabile: editResponsabile.trim() || null,
         })
         .eq('id', selectedVeicolo.id);
 
@@ -180,6 +195,11 @@ export default function FlottaPage() {
         note: editNote.trim() || null,
         data_scadenza_assicurazione: editAssicurazione || null,
         data_scadenza_revisione: editRevisione || null,
+        intestazione: editIntestazione.trim() || null,
+        anno: editAnno ? Number(editAnno) : null,
+        categoria: editCategoria.trim() || null,
+        alimentazione: editAlimentazione.trim() || null,
+        responsabile: editResponsabile.trim() || null,
       };
 
       setSelectedVeicolo(aggiornato);
@@ -277,9 +297,17 @@ export default function FlottaPage() {
 
   const veicoliFiltrati = veicoli.filter(v => {
     const matchStato = filtroStato === 'TUTTI' || v.stato === filtroStato;
-    const matchRicerca = !ricerca || 
-      v.targa?.toLowerCase().includes(ricerca.toLowerCase()) || 
-      v.modello?.toLowerCase().includes(ricerca.toLowerCase());
+    const query = ricerca.toLowerCase();
+    const matchRicerca = !ricerca || [
+      v.targa,
+      v.modello,
+      v.appalto_default,
+      v.intestazione,
+      v.categoria,
+      v.alimentazione,
+      v.responsabile,
+      v.anno?.toString(),
+    ].some((campo) => campo?.toLowerCase().includes(query));
     return matchStato && matchRicerca;
   });
 
@@ -328,7 +356,7 @@ export default function FlottaPage() {
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input 
               type="text"
-              placeholder="Cerca mezzo per targa o modello..."
+              placeholder="Cerca per targa, modello, appalto, intestazione, categoria, alimentazione, responsabile o anno..."
               value={ricerca}
               onChange={(e) => setRicerca(e.target.value)}
               className="w-full bg-[#F8F9FB] border border-gray-200 rounded-2xl pl-10 pr-4 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
@@ -392,7 +420,13 @@ export default function FlottaPage() {
 
                   <div className="mt-3">
                     <h3 className="font-extrabold text-sm text-[#1E242B]">{veicolo.modello}</h3>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Appalto: <b className="text-gray-700">{veicolo.appalto_default || 'CITI'}</b></p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      {veicolo.anno && <>Anno: <b className="text-gray-700">{veicolo.anno}</b> · </>}
+                      Appalto: <b className="text-gray-700">{veicolo.appalto_default || 'CITI'}</b>
+                    </p>
+                    {veicolo.responsabile && (
+                      <p className="text-[11px] text-gray-400 mt-0.5">Responsabile: <b className="text-gray-700">{veicolo.responsabile}</b></p>
+                    )}
                   </div>
 
                   <div className="mt-3 space-y-1.5 text-xs bg-[#F8F9FB] p-3 rounded-2xl text-gray-600">
@@ -464,6 +498,63 @@ export default function FlottaPage() {
               >
                 <X className="w-4 h-4" />
               </button>
+            </div>
+
+            {/* Anagrafica */}
+            <div className="p-4 bg-[#F8F9FB] rounded-2xl space-y-3">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Anagrafica</span>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1" title="A chi è intestato il mezzo. CC = City Cargo">Intestazione</label>
+                  <input
+                    type="text"
+                    value={editIntestazione}
+                    onChange={(e) => setEditIntestazione(e.target.value)}
+                    placeholder="es. CC"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Anno</label>
+                  <input
+                    type="number"
+                    value={editAnno}
+                    onChange={(e) => setEditAnno(e.target.value)}
+                    placeholder="es. 2018"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Categoria</label>
+                  <input
+                    type="text"
+                    value={editCategoria}
+                    onChange={(e) => setEditCategoria(e.target.value)}
+                    placeholder="es. Euro 6"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Alimentazione</label>
+                  <input
+                    type="text"
+                    value={editAlimentazione}
+                    onChange={(e) => setEditAlimentazione(e.target.value)}
+                    placeholder="es. Diesel"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Responsabile</label>
+                  <input
+                    type="text"
+                    value={editResponsabile}
+                    onChange={(e) => setEditResponsabile(e.target.value)}
+                    placeholder="es. Edgar"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Stato e Chilometri */}

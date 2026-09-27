@@ -102,9 +102,11 @@ export default function AdminDashboardPage() {
       if (cRevisione && gRevisione !== null) {
         lista.push({ label: v.targa, dettaglio: 'Revisione', giorni: gRevisione, colore: cRevisione });
       }
-      const kmRimanenti = Number(v.km_prossimo_tagliando) - Number(v.km_attuali);
-      if (kmRimanenti < 1000) {
-        lista.push({ label: v.targa, dettaglio: `Tagliando (${Math.max(kmRimanenti, 0).toLocaleString('it-IT')} km)`, giorni: kmRimanenti < 0 ? -1 : 0, colore: kmRimanenti < 0 ? 'rosso' : 'giallo' });
+      if (v.km_prossimo_tagliando !== null && v.km_prossimo_tagliando !== undefined) {
+        const kmRimanenti = Number(v.km_prossimo_tagliando) - Number(v.km_attuali);
+        if (kmRimanenti < 1000) {
+          lista.push({ label: v.targa, dettaglio: `Tagliando (${Math.max(kmRimanenti, 0).toLocaleString('it-IT')} km)`, giorni: kmRimanenti < 0 ? -1 : 0, colore: kmRimanenti < 0 ? 'rosso' : 'giallo' });
+        }
       }
     });
 
