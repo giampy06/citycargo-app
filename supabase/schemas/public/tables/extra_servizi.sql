@@ -5,12 +5,15 @@ CREATE TABLE public.extra_servizi (
   descrizione text                     NOT NULL,
   importo     numeric(10,2)            NOT NULL,
   appalto     text                     NOT NULL DEFAULT 'CITI',
+  autista_id  uuid,
   CONSTRAINT extra_servizi_pkey PRIMARY KEY (id),
+  CONSTRAINT extra_servizi_autista_id_fkey FOREIGN KEY (autista_id) REFERENCES public.autisti(id) ON DELETE SET NULL,
   CONSTRAINT extra_servizi_appalto_check CHECK (appalto = ANY (ARRAY['CITI'::text, 'EDF'::text, 'RHENUS'::text])),
   CONSTRAINT extra_servizi_importo_check CHECK (importo >= 0)
 );
 
 CREATE INDEX extra_servizi_data_idx ON public.extra_servizi (data);
+CREATE INDEX extra_servizi_autista_id_idx ON public.extra_servizi (autista_id);
 
 ALTER TABLE public.extra_servizi
   ENABLE ROW LEVEL SECURITY;

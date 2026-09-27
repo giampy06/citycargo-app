@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       .lt('created_at', fine),
     supabase.from('autisti').select('id, nome, cognome'),
     supabase.from('tariffe_giri').select('nome, codice, importo, appalto, ordine').eq('appalto', 'CITI'),
-    supabase.from('extra_servizi').select('id, data, descrizione, importo').eq('appalto', 'CITI').gte('data', primoGiorno).lte('data', ultimoGiorno),
+    supabase.from('extra_servizi').select('id, data, descrizione, importo, autista_id').eq('appalto', 'CITI').gte('data', primoGiorno).lte('data', ultimoGiorno),
   ]);
 
   // Se manca la tabella degli extra un file senza extra avrebbe i totali sbagliati: meglio fermarsi.

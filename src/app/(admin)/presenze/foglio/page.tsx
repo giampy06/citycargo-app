@@ -7,7 +7,7 @@ import { scaricaFoglioExcel } from '@/lib/scaricaFoglio';
 import { costruisciFoglio, type TurnoFoglio, type AutistaFoglio, type TariffaFoglio } from '@/lib/foglioPresenze';
 import { ChevronLeft, ChevronRight, Download, Loader2, Plus, X, Edit3, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
-type ExtraRiga = { id: string; data: string; descrizione: string; importo: number };
+type ExtraRiga = { id: string; data: string; descrizione: string; importo: number; autista_id: string | null };
 
 const MESI = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
 
@@ -35,6 +35,7 @@ export default function FoglioPresenzePage() {
   const [dataExtra, setDataExtra] = useState('');
   const [descrizione, setDescrizione] = useState('');
   const [importo, setImporto] = useState('');
+  const [autistaExtra, setAutistaExtra] = useState('');
   const [erroreModale, setErroreModale] = useState<string | null>(null);
   const [salvataggio, setSalvataggio] = useState(false);
   const [daEliminare, setDaEliminare] = useState<ExtraRiga | null>(null);
@@ -60,7 +61,7 @@ export default function FoglioPresenzePage() {
         .lt('created_at', fine),
       supabase.from('autisti').select('id, nome, cognome'),
       supabase.from('tariffe_giri').select('nome, codice, importo, appalto, ordine').eq('appalto', 'CITI'),
-      supabase.from('extra_servizi').select('id, data, descrizione, importo').eq('appalto', 'CITI').gte('data', primo).lte('data', ultimo).order('data'),
+      supabase.from('extra_servizi').select('id, data, descrizione, importo, autista_id').eq('appalto', 'CITI').gte('data', primo).lte('data', ultimo).order('data'),
     ]);
 
     const errBase = t.error || a.error || tar.error;
@@ -110,6 +111,7 @@ export default function FoglioPresenzePage() {
     setDataExtra(`${anno}-${String(mese).padStart(2, '0')}-${String(Math.min(oggi.getDate(), new Date(anno, mese, 0).getDate())).padStart(2, '0')}`);
     setDescrizione('');
     setImporto('');
+    setAutistaExtra('');
     setErroreModale(null);
     setModaleAperta(true);
   };
@@ -119,6 +121,7 @@ export default function FoglioPresenzePage() {
     setDataExtra(e.data);
     setDescrizione(e.descrizione);
     setImporto(String(e.importo));
+    setAutistaExtra(e.autista_id || '');
     setErroreModale(null);
     setModaleAperta(true);
   };
@@ -132,7 +135,7 @@ export default function FoglioPresenzePage() {
     if (importo.trim() === '' || isNaN(importoNum) || importoNum < 0) return setErroreModale('Inserisci un importo valido (0 o superiore).');
 
     setSalvataggio(true);
-    const dati = { data: dataExtra, descrizione: descrizione.trim(), importo: importoNum, appalto: 'CITI' };
+    const dati = { data: dataExtra, descrizione: descrizione.trim(), importo: importoNum, appalto: 'CITI', autista_id: autistaExtra || null };
     const { error } = inModifica
       ? await supabase.from('extra_servizi').update(dati).eq('id', inModifica.id)
       : await supabase.from('extra_servizi').insert([dati]);
@@ -325,7 +328,14 @@ export default function FoglioPresenzePage() {
                 {extraManuali.map((e) => (
                   <li key={e.id} className="py-2.5 flex items-center gap-3 text-xs">
                     <span className="w-12 font-bold text-gray-500">{formatoData(e.data).slice(0, 5)}</span>
-                    <span className="flex-1 font-semibold">{e.descrizione}</span>
+                    <span className="flex-1 font-semibold">
+                      {e.descrizione}
+                      {e.autista_id && (
+                        <span className="ml-1.5 text-[10px] font-bold text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">
+                          {autisti.find((a) => a.id === e.autista_id) ? `${autisti.find((a) => a.id === e.autista_id)!.nome} ${autisti.find((a) => a.id === e.autista_id)!.cognome}`.trim() : 'autista'}
+                        </span>
+                      )}
+                    </span>
                     <span className="font-black">{euro(e.importo)}</span>
                     <button onClick={() => apriModifica(e)} aria-label="Modifica" className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100"><Edit3 className="w-3.5 h-3.5" /></button>
                     <button onClick={() => setDaEliminare(e)} aria-label="Elimina" className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -358,6 +368,15 @@ export default function FoglioPresenzePage() {
             <div>
               <label className="text-[11px] font-bold text-gray-600 block mb-1">Importo (€)</label>
               <input type="number" min="0" step="0.01" value={importo} onChange={(e) => setImporto(e.target.value)} placeholder="es. 185" className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]" />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-gray-600 block mb-1">Autista (facoltativo)</label>
+              <select value={autistaExtra} onChange={(e) => setAutistaExtra(e.target.value)} className="w-full bg-[#F8F9FB] border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#E05353]">
+                <option value="">Nessuno (extra generico)</option>
+                {autisti.map((a) => (
+                  <option key={a.id} value={a.id}>{a.nome} {a.cognome}</option>
+                ))}
+              </select>
             </div>
             {erroreModale && <p role="alert" className="text-xs text-rose-700 font-bold bg-rose-50 border border-rose-200 rounded-xl px-3 py-2.5">{erroreModale}</p>}
             <div className="flex items-center justify-end gap-2">

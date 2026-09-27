@@ -19,7 +19,7 @@ export type TariffaFoglio = {
   ordine?: number | null;
 };
 
-export type ExtraManuale = { id?: string; data: string; descrizione: string; importo: number | string };
+export type ExtraManuale = { id?: string; data: string; descrizione: string; importo: number | string; autista_id?: string | null };
 
 export type CellaFoglio = { testo: string; daControllare: boolean };
 
@@ -136,9 +136,10 @@ export function costruisciFoglio(opzioni: {
 
   for (const e of extraManuali) {
     if (!e.data.startsWith(prefisso)) continue;
+    const autista = e.autista_id ? autisti.find((a) => a.id === e.autista_id) : null;
     extra.push({
       data: `${e.data.slice(8, 10)}/${e.data.slice(5, 7)}`,
-      descrizione: e.descrizione,
+      descrizione: autista ? `${e.descrizione} - ${autista.nome} ${autista.cognome}`.trim() : e.descrizione,
       importo: num(e.importo),
       origine: 'manuale',
       daControllare: false,
