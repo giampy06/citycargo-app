@@ -46,8 +46,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <>
       <div className="px-5 py-6 flex items-center gap-2.5 border-b border-white/10">
-        <div className="w-9 h-9 rounded-xl bg-[#E05353] flex items-center justify-center font-black text-sm">
-          CC
+        <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center p-1.5 shrink-0">
+          <img src="/logo.png" alt="City Cargo" className="w-full h-full object-contain" />
         </div>
         <div>
           <p className="font-extrabold text-sm leading-tight">City Cargo</p>
@@ -100,8 +100,8 @@ export default function AdminSidebar() {
       {/* Topbar con hamburger — solo schermi piccoli */}
       <div className="md:hidden sticky top-0 z-40 bg-[#1E242B] text-white flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-[#E05353] flex items-center justify-center font-black text-xs">
-            CC
+          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-1 shrink-0">
+            <img src="/logo.png" alt="City Cargo" className="w-full h-full object-contain" />
           </div>
           <span className="font-extrabold text-sm">City Cargo</span>
         </div>
