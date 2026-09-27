@@ -254,48 +254,50 @@ export default function ArchivioPresenzePage() {
   return (
     <div className="min-h-screen bg-[#F8F9FB] text-[#1E242B] pb-24 antialiased font-sans">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-30 px-4 py-3 sm:px-8">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button 
+      <header className="bg-white border-b border-gray-100 md:sticky md:top-0 z-30 px-4 py-3 sm:px-8">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
               type="button"
               onClick={() => router.push('/')}
-              className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
+              className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <div>
-              <h1 className="font-extrabold text-base tracking-tight">Archivio Presenze & Quaderno Giornaliero</h1>
-              <p className="text-[11px] text-gray-400 font-medium">Riepilogo Autisti, Giri, Chilometri e Importi</p>
+            <div className="min-w-0">
+              <h1 className="font-extrabold text-base tracking-tight truncate">Archivio Presenze & Quaderno Giornaliero</h1>
+              <p className="hidden sm:block text-[11px] text-gray-400 font-medium">Riepilogo Autisti, Giri, Chilometri e Importi</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button 
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
               onClick={fetchPresenze}
+              aria-label="Aggiorna"
               className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#E05353]' : ''}`} />
             </button>
             <Link
-              href="/presenze/foglio"
-              className="h-10 px-4 rounded-2xl bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-xs flex items-center gap-1.5 transition-colors"
-            >
-              <FileSpreadsheet className="w-4 h-4" /> Foglio mese
-            </Link>
-            <Link
               href="/presenze/tariffe"
-              className="h-10 px-4 rounded-2xl bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-xs flex items-center gap-1.5 transition-colors"
+              className="h-10 px-4 rounded-2xl bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-xs flex items-center gap-1.5 transition-colors whitespace-nowrap"
             >
               <Euro className="w-4 h-4" /> Tariffe
             </Link>
-            <button 
+            <button
               onClick={handleExportExcelMensile}
               disabled={esportando}
-              className="h-10 px-4 rounded-2xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all"
+              title="Scarica direttamente l'Excel del mese in corso"
+              className="h-10 px-4 rounded-2xl bg-gray-50 hover:bg-gray-100 disabled:opacity-50 text-gray-700 font-bold text-xs flex items-center gap-1.5 transition-colors whitespace-nowrap"
             >
-              {esportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Esporta Excel
+              {esportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Esporta<span className="hidden sm:inline"> Excel</span>
             </button>
+            <Link
+              href="/presenze/foglio"
+              className="h-10 px-4 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all whitespace-nowrap"
+            >
+              <FileSpreadsheet className="w-4 h-4" /> Foglio<span className="hidden sm:inline"> mese</span>
+            </Link>
           </div>
         </div>
       </header>
