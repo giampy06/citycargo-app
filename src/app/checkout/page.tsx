@@ -4,9 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/supabase';
 import { CheckSquare, Loader2, AlertCircle, Gauge, ArrowLeft } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [turnoAperto, setTurnoAperto] = useState<any | null>(null);
@@ -64,7 +66,7 @@ export default function CheckoutPage() {
 
       if (error) throw new Error(`Impossibile chiudere il turno: ${error.message}`);
 
-      alert(`Turno chiuso con successo! Percorsi ${kmPercorsi} km.`);
+      toast(`Turno chiuso con successo! Percorsi ${kmPercorsi} km.`, 'success');
       router.push('/autista');
     } catch (err: any) {
       setErrorMsg(err.message || 'Errore durante la chiusura del turno.');

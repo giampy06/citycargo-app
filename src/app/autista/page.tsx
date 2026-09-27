@@ -19,9 +19,11 @@ import {
   Download,
   ChevronRight
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 export default function AppAutistaDashboard() {
   const router = useRouter();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [autista, setAutista] = useState<any | null>(null);
   const [turnoAttivo, setTurnoAttivo] = useState<any | null>(null);
@@ -164,10 +166,10 @@ export default function AppAutistaDashboard() {
       if (error) throw error;
 
       setDocumenti(documenti.map(d => d.id === docDaFirmare.id ? { ...d, firmato: true } : d));
-      alert('Documento firmato digitalmente con successo!');
+      toast('Documento firmato digitalmente con successo!', 'success');
       setDocDaFirmare(null);
     } catch (err: any) {
-      alert(`Errore salvataggio firma: ${err.message}`);
+      toast(`Errore salvataggio firma: ${err.message}`, 'error');
     } finally {
       setSigning(false);
     }
@@ -328,7 +330,7 @@ export default function AppAutistaDashboard() {
                 onClick={async () => {
                   const url = await getPrivateFileUrl('documenti-veicoli', docDaFirmare.file_url);
                   if (url) window.open(url, '_blank', 'noreferrer');
-                  else alert('Impossibile aprire il documento in questo momento. Riprova.');
+                  else toast('Impossibile aprire il documento in questo momento. Riprova.', 'error');
                 }}
                 className="block w-full p-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-2xl text-center text-xs font-bold text-[#E05353] transition"
               >

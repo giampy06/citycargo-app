@@ -29,9 +29,13 @@ import {
   ExternalLink,
   MapPin,
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 export default function ArchivioPresenzePage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const confirm = useConfirm();
   const [turni, setTurni] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [ricerca, setRicerca] = useState('');
@@ -119,13 +123,13 @@ export default function ArchivioPresenzePage() {
     const kmNum = editKmFine ? Number(editKmFine) : null;
 
     if (kmNum !== null && kmNum < Number(turno.km_inizio)) {
-      alert(`I km finali non possono essere inferiori a quelli iniziali (${turno.km_inizio})`);
+      toast(`I km finali non possono essere inferiori a quelli iniziali (${turno.km_inizio})`, 'error');
       return;
     }
 
     const importoNum = Number(editImporto.replace(',', '.'));
     if (editImporto.trim() === '' || isNaN(importoNum) || importoNum < 0) {
-      alert('Inserisci un importo valido (0 o superiore).');
+      toast('Inserisci un importo valido (0 o superiore).', 'error');
       return;
     }
 
@@ -151,14 +155,14 @@ export default function ArchivioPresenzePage() {
 
       setEditingId(null);
       fetchPresenze();
-      alert('Turno aggiornato con successo!');
+      toast('Turno aggiornato con successo!', 'success');
     } catch (err: any) {
-      alert(`Errore: ${err.message}`);
+      toast(`Errore: ${err.message}`, 'error');
     }
   };
 
   const handleDeleteTurno = async (id: string, codice: string) => {
-    const conferma = window.confirm(`Sei sicuro di voler eliminare il turno ${codice}? L'operazione è irreversibile.`);
+    const conferma = await confirm(`Sei sicuro di voler eliminare il turno ${codice}? L'operazione è irreversibile.`, { pericoloso: true });
     if (!conferma) return;
 
     try {
@@ -169,10 +173,10 @@ export default function ArchivioPresenzePage() {
 
       if (error) throw error;
 
-      alert('Turno eliminato dal registro!');
+      toast('Turno eliminato dal registro!', 'success');
       fetchPresenze();
     } catch (err: any) {
-      alert(`Errore cancellazione: ${err.message}`);
+      toast(`Errore cancellazione: ${err.message}`, 'error');
     }
   };
 
@@ -245,7 +249,7 @@ export default function ArchivioPresenzePage() {
     try {
       await scaricaFoglioExcel(currentYear, currentMonth + 1);
     } catch (err: any) {
-      alert(`Esportazione non riuscita: ${err.message}`);
+      toast(`Esportazione non riuscita: ${err.message}`, 'error');
     } finally {
       setEsportando(false);
     }

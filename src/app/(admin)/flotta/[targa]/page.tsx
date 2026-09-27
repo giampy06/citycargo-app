@@ -17,8 +17,10 @@ import {
   Euro,
   Receipt
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 export default function SchedaTecnicaFurgonePage() {
+  const { toast } = useToast();
   const params = useParams();
   const targa = (params?.targa as string)?.toUpperCase();
 
@@ -86,7 +88,7 @@ export default function SchedaTecnicaFurgonePage() {
       if (error) throw error;
       setVeicolo({ ...veicolo, stato: nuovoStato });
     } catch (err: any) {
-      alert(`Errore aggiornamento stato: ${err.message}`);
+      toast(`Errore aggiornamento stato: ${err.message}`, 'error');
     } finally {
       setUpdatingStato(false);
     }
@@ -99,7 +101,7 @@ export default function SchedaTecnicaFurgonePage() {
     if (url) {
       window.open(url, '_blank', 'noreferrer');
     } else {
-      alert('Impossibile aprire il documento in questo momento. Riprova.');
+      toast('Impossibile aprire il documento in questo momento. Riprova.', 'error');
     }
   };
 
@@ -123,9 +125,9 @@ export default function SchedaTecnicaFurgonePage() {
       if (dbErr) throw dbErr;
 
       setVeicolo({ ...veicolo, ...updateField });
-      alert(`Documento ${tipo} salvato con successo!`);
+      toast(`Documento ${tipo} salvato con successo!`, 'success');
     } catch (err: any) {
-      alert(`Errore upload: ${err.message}`);
+      toast(`Errore upload: ${err.message}`, 'error');
     } finally {
       setUploadingDoc(null);
     }

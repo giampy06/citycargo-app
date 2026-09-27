@@ -25,9 +25,13 @@ import {
   Receipt,
   Euro
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 export default function FlottaPage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const confirm = useConfirm();
   const [veicoli, setVeicoli] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [ricerca, setRicerca] = useState('');
@@ -128,7 +132,7 @@ export default function FlottaPage() {
       setDocModalUrl(url);
       setDocModalTitolo(titolo);
     } else {
-      alert('Impossibile aprire il documento in questo momento. Riprova.');
+      toast('Impossibile aprire il documento in questo momento. Riprova.', 'error');
     }
   };
 
@@ -158,9 +162,9 @@ export default function FlottaPage() {
       const aggiornato = { ...selectedVeicolo, [tipo]: url };
       setSelectedVeicolo(aggiornato);
       setVeicoli(veicoli.map(v => v.id === aggiornato.id ? aggiornato : v));
-      alert('Documento salvato!');
+      toast('Documento salvato!', 'success');
     } catch (err: any) {
-      alert(`Errore caricamento: ${err.message}`);
+      toast(`Errore caricamento: ${err.message}`, 'error');
     } finally {
       setUploadingDoc(null);
     }
@@ -204,9 +208,9 @@ export default function FlottaPage() {
 
       setSelectedVeicolo(aggiornato);
       setVeicoli(veicoli.map(v => v.id === aggiornato.id ? aggiornato : v));
-      alert('Scheda furgone salvata!');
+      toast('Scheda furgone salvata!', 'success');
     } catch (err: any) {
-      alert(`Errore salvataggio: ${err.message}`);
+      toast(`Errore salvataggio: ${err.message}`, 'error');
     } finally {
       setSavingEdit(false);
     }
@@ -227,13 +231,13 @@ export default function FlottaPage() {
         setSelectedVeicolo({ ...selectedVeicolo, stato: nuovoStato });
       }
     } catch (err: any) {
-      alert(`Errore aggiornamento stato: ${err.message}`);
+      toast(`Errore aggiornamento stato: ${err.message}`, 'error');
     }
   };
 
   // CANCELLAZIONE DEFINITIVA VEICOLO
   const handleDeleteVeicolo = async (id: string, targaMezzo: string) => {
-    const conferma = window.confirm(`Vuoi davvero eliminare il veicolo ${targaMezzo} dalla flotta? L'azione è definitiva.`);
+    const conferma = await confirm(`Vuoi davvero eliminare il veicolo ${targaMezzo} dalla flotta? L'azione è definitiva.`, { pericoloso: true });
     if (!conferma) return;
 
     try {
@@ -246,9 +250,9 @@ export default function FlottaPage() {
 
       setVeicoli(prev => prev.filter(v => v.id !== id));
       if (selectedVeicolo?.id === id) setSelectedVeicolo(null);
-      alert(`Furgone ${targaMezzo} eliminato con successo!`);
+      toast(`Furgone ${targaMezzo} eliminato con successo!`, 'success');
     } catch (err: any) {
-      alert(`Errore eliminazione: ${err.message}`);
+      toast(`Errore eliminazione: ${err.message}`, 'error');
     }
   };
 
@@ -287,7 +291,7 @@ export default function FlottaPage() {
       setScadenzaRevisione('');
       setIsModalOpen(false);
       fetchVeicoli();
-      alert('Veicolo aggiunto alla flotta!');
+      toast('Veicolo aggiunto alla flotta!', 'success');
     } catch (err: any) {
       setModalError(err.message || 'Errore durante la creazione.');
     } finally {
@@ -788,7 +792,7 @@ export default function FlottaPage() {
                           onClick={async () => {
                             const url = await getPrivateFileUrl('fleet-documents', s.fattura_url);
                             if (url) window.open(url, '_blank', 'noreferrer');
-                            else alert('Impossibile aprire il documento in questo momento. Riprova.');
+                            else toast('Impossibile aprire il documento in questo momento. Riprova.', 'error');
                           }}
                           className="bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition text-[10px]"
                         >

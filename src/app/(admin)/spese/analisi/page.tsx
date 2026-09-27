@@ -18,8 +18,10 @@ import {
   Receipt,
   RefreshCw
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 export default function AnalisiSpeseIAPage() {
+  const { toast } = useToast();
   const [spese, setSpese] = useState<any[]>([]);
   const [veicoli, setVeicoli] = useState<any[]>([]);
   const [loadingDati, setLoadingDati] = useState(true);
@@ -71,7 +73,7 @@ export default function AnalisiSpeseIAPage() {
 
   const handleGeneraReportIA = async () => {
     if (spese.length === 0) {
-      alert('Registra almeno una spesa o fattura prima di avviare l\'analisi con l\'IA.');
+      toast('Registra almeno una spesa o fattura prima di avviare l\'analisi con l\'IA.', 'error');
       return;
     }
 

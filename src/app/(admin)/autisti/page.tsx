@@ -22,9 +22,13 @@ import {
   Megaphone,
   Trash2
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 export default function GestioneAutistiPage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const confirm = useConfirm();
   const [autisti, setAutisti] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroStato, setFiltroStato] = useState('TUTTI');
@@ -74,15 +78,15 @@ export default function GestioneAutistiPage() {
 
       if (error) throw error;
       setAutisti(autisti.map(a => a.id === id ? { ...a, stato: 'attivo' } : a));
-      alert(`Autista ${email} approvato con successo!`);
+      toast(`Autista ${email} approvato con successo!`, 'success');
     } catch (err: any) {
-      alert(`Errore approvazione: ${err.message}`);
+      toast(`Errore approvazione: ${err.message}`, 'error');
     }
   };
 
   // Funzione per eliminare l'autista
   const handleEliminaAutista = async (id: string, nomeCompleto: string) => {
-    const conferma = window.confirm(`⚠️ ATTENZIONE: Sei sicuro di voler ELIMINARE definitivamente l'autista ${nomeCompleto}? L'operazione è irreversibile.`);
+    const conferma = await confirm(`ATTENZIONE: Sei sicuro di voler ELIMINARE definitivamente l'autista ${nomeCompleto}? L'operazione è irreversibile.`, { pericoloso: true });
     if (!conferma) return;
 
     try {
@@ -92,10 +96,10 @@ export default function GestioneAutistiPage() {
         .eq('id', id);
 
       if (error) throw error;
-      alert('Autista eliminato con successo.');
+      toast('Autista eliminato con successo.', 'success');
       fetchAutisti();
     } catch (err: any) {
-      alert(`Errore cancellazione: ${err.message}`);
+      toast(`Errore cancellazione: ${err.message}`, 'error');
     }
   };
 
@@ -128,9 +132,9 @@ export default function GestioneAutistiPage() {
 
       setSelectedAutista(aggiornato);
       setAutisti(autisti.map(a => a.id === aggiornato.id ? aggiornato : a));
-      alert('Scadenze mediche e sicurezza aggiornate!');
+      toast('Scadenze mediche e sicurezza aggiornate!', 'success');
     } catch (err: any) {
-      alert(`Errore salvataggio: ${err.message}`);
+      toast(`Errore salvataggio: ${err.message}`, 'error');
     } finally {
       setSavingMedica(false);
     }
@@ -139,7 +143,7 @@ export default function GestioneAutistiPage() {
   const handleInviaDocumentoFirma = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fileDoc) {
-      alert('Seleziona un file da inviare.');
+      toast('Seleziona un file da inviare.', 'error');
       return;
     }
     setSendingDoc(true);
@@ -173,7 +177,7 @@ export default function GestioneAutistiPage() {
         const { error: dbErr } = await supabase.from('documenti_aziendali').insert(payload);
         if (dbErr) throw dbErr;
 
-        alert(`Documento inviato con successo a tutti i ${autistiAttivi.length} autisti!`);
+        toast(`Documento inviato con successo a tutti i ${autistiAttivi.length} autisti!`, 'success');
       } else {
         if (!selectedAutista) throw new Error('Nessun autista selezionato.');
         
@@ -189,7 +193,7 @@ export default function GestioneAutistiPage() {
         ]);
         if (dbErr) throw dbErr;
 
-        alert(`Documento inviato a ${selectedAutista.nome} per la firma digitale!`);
+        toast(`Documento inviato a ${selectedAutista.nome} per la firma digitale!`, 'success');
       }
 
       setIsDocModalOpen(false);
@@ -197,7 +201,7 @@ export default function GestioneAutistiPage() {
       setDescDoc('');
       setFileDoc(null);
     } catch (err: any) {
-      alert(`Errore invio documento: ${err.message}`);
+      toast(`Errore invio documento: ${err.message}`, 'error');
     } finally {
       setSendingDoc(false);
     }
@@ -389,7 +393,7 @@ export default function GestioneAutistiPage() {
                     onClick={async () => {
                       const url = await getPrivateFileUrl('documenti-veicoli', selectedAutista.foto_patente_fronte);
                       if (url) window.open(url, '_blank', 'noreferrer');
-                      else alert('Impossibile aprire il documento in questo momento. Riprova.');
+                      else toast('Impossibile aprire il documento in questo momento. Riprova.', 'error');
                     }}
                     className="p-3 bg-[#F8F9FB] border border-gray-200 rounded-2xl text-center text-xs font-bold text-[#E05353] flex items-center justify-center gap-1 hover:bg-gray-100"
                   >
@@ -405,7 +409,7 @@ export default function GestioneAutistiPage() {
                     onClick={async () => {
                       const url = await getPrivateFileUrl('documenti-veicoli', selectedAutista.foto_patente_retro);
                       if (url) window.open(url, '_blank', 'noreferrer');
-                      else alert('Impossibile aprire il documento in questo momento. Riprova.');
+                      else toast('Impossibile aprire il documento in questo momento. Riprova.', 'error');
                     }}
                     className="p-3 bg-[#F8F9FB] border border-gray-200 rounded-2xl text-center text-xs font-bold text-[#E05353] flex items-center justify-center gap-1 hover:bg-gray-100"
                   >

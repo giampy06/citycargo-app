@@ -20,6 +20,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
+import { useToast } from '@/components/ui/Toast';
 
 const COLORI_LINEE = ['#E05353', '#1E242B', '#059669', '#2563EB', '#D97706', '#7C3AED', '#DB2777'];
 
@@ -39,6 +40,7 @@ function ultimiSeiMesi() {
 }
 
 export default function ReportAutistiPage() {
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [autisti, setAutisti] = useState<any[]>([]);
   const [turni, setTurni] = useState<any[]>([]);
@@ -100,7 +102,7 @@ export default function ReportAutistiPage() {
 
   const handleExport = () => {
     if (riepilogoMese.length === 0) {
-      alert('Nessun dato da esportare.');
+      toast('Nessun dato da esportare.', 'error');
       return;
     }
     downloadCsv(

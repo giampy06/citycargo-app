@@ -17,9 +17,11 @@ import {
   Eraser,
   X
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 export default function CedoliniAutistaPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [user, setUser] = useState<any>(null);
   const [mieiCedolini, setMieiCedolini] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,9 +136,9 @@ export default function CedoliniAutistaPage() {
       ));
       
       setSignatureModal(null);
-      alert('Firma telematica registrata con successo!');
+      toast('Firma telematica registrata con successo!', 'success');
     } catch (err: any) {
-      alert(`Errore salvataggio: ${err.message}`);
+      toast(`Errore salvataggio: ${err.message}`, 'error');
     } finally {
       setSigningId(null);
     }
@@ -207,7 +209,7 @@ export default function CedoliniAutistaPage() {
                   onClick={async () => {
                     const url = await getPrivateFileUrl('cedolini', c.file_url);
                     if (url) window.open(url, '_blank', 'noreferrer');
-                    else alert('Impossibile aprire il cedolino in questo momento. Riprova.');
+                    else toast('Impossibile aprire il cedolino in questo momento. Riprova.', 'error');
                   }}
                   className="flex-1 py-3 bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-bold rounded-2xl flex items-center justify-center gap-1.5 transition border border-gray-200"
                 >

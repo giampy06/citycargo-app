@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import AppProviders from '@/components/ui/AppProviders';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,7 @@ export default function RootLayout({
   return (
     <html lang="it">
       <body className="bg-[#F8F9FB] text-[#1E242B] antialiased">
-        {children}
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

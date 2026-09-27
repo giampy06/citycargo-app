@@ -20,8 +20,12 @@ import {
   FileSpreadsheet,
   Layers
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 export default function GestioneSpesePage() {
+  const { toast } = useToast();
+  const confirm = useConfirm();
   const [veicoli, setVeicoli] = useState<any[]>([]);
   const [spese, setSpese] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,11 +80,11 @@ export default function GestioneSpesePage() {
   const handleSalvaSpesa = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targaSelezionata) {
-      alert('Seleziona un veicolo.');
+      toast('Seleziona un veicolo.', 'error');
       return;
     }
     if (!importo || Number(importo) <= 0) {
-      alert('Inserisci un importo valido.');
+      toast('Inserisci un importo valido.', 'error');
       return;
     }
 
@@ -120,16 +124,16 @@ export default function GestioneSpesePage() {
       setDescrizione('');
       setFileFattura(null);
       fetchDati();
-      alert('Spesa registrata con successo!');
+      toast('Spesa registrata con successo!', 'success');
     } catch (err: any) {
-      alert(`Errore: ${err.message}`);
+      toast(`Errore: ${err.message}`, 'error');
     } finally {
       setUploading(false);
     }
   };
 
   const handleEliminaSpesa = async (id: string) => {
-    const conferma = window.confirm("Sei sicuro di voler eliminare questa spesa/fattura? L'operazione è irreversibile.");
+    const conferma = await confirm("Sei sicuro di voler eliminare questa spesa/fattura? L'operazione è irreversibile.", { pericoloso: true });
     if (!conferma) return;
 
     try {
@@ -141,15 +145,15 @@ export default function GestioneSpesePage() {
       if (error) throw error;
       
       setSpese(spese.filter(s => s.id !== id));
-      alert('Spesa eliminata con successo.');
+      toast('Spesa eliminata con successo.', 'success');
     } catch (err: any) {
-      alert(`Errore eliminazione: ${err.message}`);
+      toast(`Errore eliminazione: ${err.message}`, 'error');
     }
   };
 
   const handleAnalyzeDkv = async () => {
     if (!dkvFile) {
-      alert('Seleziona il file PDF o immagine della fattura DKV.');
+      toast('Seleziona il file PDF o immagine della fattura DKV.', 'error');
       return;
     }
 
@@ -179,7 +183,7 @@ export default function GestioneSpesePage() {
         setAnalyzingDkv(false);
       };
     } catch (err: any) {
-      alert(`Errore IA: ${err.message}`);
+      toast(`Errore IA: ${err.message}`, 'error');
       setAnalyzingDkv(false);
     }
   };
@@ -211,13 +215,13 @@ export default function GestioneSpesePage() {
       const { error } = await supabase.from('vehicle_expenses').insert(rowsToInsert);
       if (error) throw error;
 
-      alert(`Successo! Ripartite ${rowsToInsert.length} spese tra i vari furgoni della flotta.`);
+      toast(`Successo! Ripartite ${rowsToInsert.length} spese tra i vari furgoni della flotta.`, 'success');
       setIsDkvModalOpen(false);
       setDkvExtractedItems([]);
       setDkvFile(null);
       fetchDati();
     } catch (err: any) {
-      alert(`Errore inserimento: ${err.message}`);
+      toast(`Errore inserimento: ${err.message}`, 'error');
     } finally {
       setSavingDkv(false);
     }
@@ -480,7 +484,7 @@ export default function GestioneSpesePage() {
                         onClick={async () => {
                           const url = await getPrivateFileUrl('fleet-documents', s.fattura_url);
                           if (url) window.open(url, '_blank', 'noreferrer');
-                          else alert('Impossibile aprire il documento in questo momento. Riprova.');
+                          else toast('Impossibile aprire il documento in questo momento. Riprova.', 'error');
                         }}
                         className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition text-xs"
                       >

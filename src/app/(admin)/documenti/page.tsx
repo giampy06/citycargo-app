@@ -16,9 +16,11 @@ import {
   FileText,
   ShieldCheck
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 export default function RegistroFirmePage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [documenti, setDocumenti] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -179,7 +181,7 @@ export default function RegistroFirmePage() {
                               onClick={async () => {
                                 const url = await getPrivateFileUrl('documenti-veicoli', doc.file_url);
                                 if (url) window.open(url, '_blank', 'noreferrer');
-                                else alert('Impossibile aprire il documento in questo momento. Riprova.');
+                                else toast('Impossibile aprire il documento in questo momento. Riprova.', 'error');
                               }}
                               className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors"
                               title="Scarica File Originale"

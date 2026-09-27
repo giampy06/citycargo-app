@@ -23,9 +23,13 @@ import {
   Users,
   Trash2
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 export default function AdminCedoliniPage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const confirm = useConfirm();
   const [cedolini, setCedolini] = useState<any[]>([]);
   const [autisti, setAutisti] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +72,7 @@ export default function AdminCedoliniPage() {
   const handleUploadRapido = async (autista: any) => {
     const filePdf = filePerAutista[autista.id];
     if (!filePdf) {
-      alert(`Seleziona prima un file PDF per ${autista.cognome} ${autista.nome}.`);
+      toast(`Seleziona prima un file PDF per ${autista.cognome} ${autista.nome}.`, 'error');
       return;
     }
 
@@ -109,16 +113,16 @@ export default function AdminCedoliniPage() {
 
       setFilePerAutista({ ...filePerAutista, [autista.id]: null });
       fetchData();
-      alert(`Busta paga caricata con successo per ${nomeCompleto}!`);
+      toast(`Busta paga caricata con successo per ${nomeCompleto}!`, 'success');
     } catch (err: any) {
-      alert(`Errore durante il caricamento: ${err.message}`);
+      toast(`Errore durante il caricamento: ${err.message}`, 'error');
     } finally {
       setUploadingId(null);
     }
   };
 
   const handleEliminaCedolino = async (id: string, riferimento: string) => {
-    const conferma = window.confirm(`Sei sicuro di voler eliminare il cedolino "${riferimento}"? L'operazione è irreversibile.`);
+    const conferma = await confirm(`Sei sicuro di voler eliminare il cedolino "${riferimento}"? L'operazione è irreversibile.`, { pericoloso: true });
     if (!conferma) return;
 
     try {
@@ -129,9 +133,9 @@ export default function AdminCedoliniPage() {
 
       if (error) throw error;
       setCedolini(cedolini.filter(c => c.id !== id));
-      alert('Cedolino eliminato con successo.');
+      toast('Cedolino eliminato con successo.', 'success');
     } catch (err: any) {
-      alert(`Errore eliminazione: ${err.message}`);
+      toast(`Errore eliminazione: ${err.message}`, 'error');
     }
   };
 
@@ -355,7 +359,7 @@ export default function AdminCedoliniPage() {
                       onClick={async () => {
                         const url = await getPrivateFileUrl('cedolini', item.file_url);
                         if (url) window.open(url, '_blank', 'noopener,noreferrer');
-                        else alert('Impossibile aprire il cedolino in questo momento. Riprova.');
+                        else toast('Impossibile aprire il cedolino in questo momento. Riprova.', 'error');
                       }}
                       className="py-2.5 px-3.5 bg-gray-50 hover:bg-gray-100 text-[#1E242B] rounded-2xl font-bold text-xs flex items-center gap-1.5 transition-colors border border-gray-100"
                     >

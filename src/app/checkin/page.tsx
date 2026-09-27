@@ -13,9 +13,11 @@ import {
   AlertCircle, 
   Check 
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 export default function CheckinPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [user, setUser] = useState<any>(null);
   const [veicoli, setVeicoli] = useState<any[]>([]);
   const [loadingInit, setLoadingInit] = useState(true);
@@ -196,7 +198,7 @@ export default function CheckinPage() {
       const turno = data as { id: string };
 
       if (secondoCheckin) {
-        alert(`Check-in registrato con successo!\nVerbale: ${codiceVerbale}`);
+        toast(`Check-in registrato con successo!\nVerbale: ${codiceVerbale}`, 'success');
         window.location.href = '/autista';
         return;
       }
@@ -214,7 +216,7 @@ export default function CheckinPage() {
       setUploadProgressText('Timbro e invio Fiancata Destra (4/4)...');
       await uploadFotoCertificata(fotoLatoDx!, 'Fiancata Destra', 'lato_dx', turno.id, codiceVerbale, autistaNome);
 
-      alert(`Check-in registrato con successo!\n4 Foto certificate archiviate.\nVerbale: ${codiceVerbale}`);
+      toast(`Check-in registrato con successo!\n4 Foto certificate archiviate.\nVerbale: ${codiceVerbale}`, 'success');
       window.location.href = '/autista';
     } catch (err: any) {
       console.error(err);
