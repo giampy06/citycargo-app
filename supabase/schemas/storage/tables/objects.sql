@@ -1,18 +1,12 @@
-CREATE POLICY "Consenti lettura PDF cedolini" ON "storage"."objects"
-  FOR SELECT
-  TO PUBLIC
-  USING ((bucket_id = 'cedolini'::text));
-
-CREATE POLICY "Consenti upload PDF cedolini" ON "storage"."objects"
-  FOR INSERT
-  TO PUBLIC
-  WITH CHECK ((bucket_id = 'cedolini'::text));
-
-CREATE POLICY "Permetti upload pubblico documenti" ON "storage"."objects"
-  FOR ALL
-  TO PUBLIC
-  USING ((bucket_id = 'documenti-veicoli'::text))
-  WITH CHECK ((bucket_id = 'documenti-veicoli'::text));
+-- SECURITY-AUDIT.md punto 1 (CRITICO, corretto il 2026-09-28): le 3 policy
+-- permissive "Consenti lettura PDF cedolini", "Consenti upload PDF cedolini" e
+-- "Permetti upload pubblico documenti" concedevano accesso TO PUBLIC (quindi
+-- anche al ruolo anon, senza alcun login) su cedolini/documenti-veicoli senza
+-- nessuna condizione. Le policy RESTRICTIVE sotto sono TO authenticated e non
+-- si applicavano al ruolo anon, lasciando quelle 3 come unica regola in vigore
+-- per un visitatore non loggato. Rimosse con
+-- supabase/migrazioni_manuali/2026-09-28_fix_storage_rls_anon.sql — le policy
+-- granulari già esistenti coprono tutti i casi d'uso legittimi.
 
 CREATE POLICY "Storage public access verbali" ON "storage"."objects"
   FOR ALL
