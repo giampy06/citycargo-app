@@ -8,16 +8,16 @@
 
 ## Sommario esecutivo
 
-| # | Problema | Gravità |
-|---|---|---|
-| 1 | Patenti e buste paga di **tutti** gli autisti scaricabili da chiunque, **senza login**, tramite la sola chiave pubblica | 🔴 CRITICO |
-| 2 | Token del bot Telegram committato in chiaro nella storia di un repository **pubblico** | 🔴 CRITICO |
-| 3 | 3 bucket storage legacy impostati `public: true` (oggi vuoti, ma pronti a esporre qualsiasi file ci finisca) | 🟠 IMPORTANTE |
-| 4 | Nessun header di sicurezza (CSP, X-Frame-Options) — rischio clickjacking sul pannello admin | 🟠 IMPORTANTE |
-| 5 | Funzioni RPC critiche eseguibili anche dal ruolo `anon` (innocuo oggi, superficie inutile) | 🟠 IMPORTANTE |
-| 6 | File `src/lib/supabase.ts` morto, con chiave pubblica hardcoded invece che da env | 🟡 MINORE |
-| 7 | 1 vulnerabilità *moderate* in `uuid` (via `exceljs`), non risulta sfruttabile con i nostri input | 🟡 MINORE |
-| 8 | Foto patenti: valutazione rischio residuo — vedi sezione dedicata | 📋 Raccomandazione |
+| # | Problema | Gravità | Stato (2026-09-28) |
+|---|---|---|---|
+| 1 | Patenti e buste paga di **tutti** gli autisti scaricabili da chiunque, **senza login**, tramite la sola chiave pubblica | 🔴 CRITICO | ✅ Corretto e riverificato (200→404 con la stessa chiamata anonima) |
+| 2 | Token del bot Telegram committato in chiaro nella storia di un repository **pubblico** | 🔴 CRITICO | ⏳ **Ancora aperto, rimandato di proposito** — richiede un'azione manuale su BotFather (`/mybots` → bot → **API Token** → *Revoke current token*), non posso farla io. Verificato il 2026-09-28: il vecchio token risponde ancora `200 OK` a `getMe`, quindi è tuttora valido e sfruttabile da chi lo trova nella storia Git pubblica. Da fare appena possibile. |
+| 3 | 3 bucket storage legacy impostati `public: true` (oggi vuoti, ma pronti a esporre qualsiasi file ci finisca) | 🟠 IMPORTANTE | ✅ Bucket impostati privati; policy `Storage public access verbali` in attesa che tu esegua l'SQL |
+| 4 | Nessun header di sicurezza (CSP, X-Frame-Options) — rischio clickjacking sul pannello admin | 🟠 IMPORTANTE | ✅ Corretto e verificato in locale (header presenti nella risposta) |
+| 5 | Funzioni RPC critiche eseguibili anche dal ruolo `anon` (innocuo oggi, superficie inutile) | 🟠 IMPORTANTE | ⏳ SQL pronto, in attesa che tu lo esegua |
+| 6 | File `src/lib/supabase.ts` morto, con chiave pubblica hardcoded invece che da env | 🟡 MINORE | ✅ File cancellato |
+| 7 | 1 vulnerabilità *moderate* in `uuid` (via `exceljs`), non risulta sfruttabile con i nostri input | 🟡 MINORE | ⏸️ Rimandato di proposito (rischio reale basso, fix comporta un downgrade major di exceljs) |
+| 8 | Foto patenti: valutazione rischio residuo — vedi sezione dedicata | 📋 Raccomandazione | ✅ Implementata l'opzione "solo numero + scadenza, niente foto" |
 
 Il punto 1 è, con largo margine, il problema più grave: è l'unico che ho potuto **dimostrare concretamente** (non solo dedurre dal codice) con una chiamata HTTP reale, senza aver mai effettuato login.
 
@@ -245,6 +245,8 @@ Non è un secco "tieni" o "togli": la raccomandazione concreta è **mantenere la
 - Una volta approvato, il file va **cancellato dallo storage** (mantenendo solo `numero_patente` e `scadenza_patente`, già presenti come campi separati e sufficienti per il monitoraggio scadenze già implementato).
 
 Questo dà il beneficio della verifica (che numero+scadenza da soli non danno: chiunque potrebbe scrivere un numero e una data a caso) **senza** tenere in giro a tempo indefinito un archivio crescente di documenti d'identità fotografici, che è la parte che pesa di più in caso di violazione. Se questo passaggio di cancellazione post-approvazione non è realizzabile a breve, allora la seconda scelta più sensata è passare a solo numero+scadenza: la foto oggi non viene ri-verificata periodicamente (non c'è un controllo "la foto corrisponde ancora" dopo il primo check), quindi il suo valore nel tempo decresce mentre il rischio di conservarla resta costante o cresce con l'archivio.
+
+**Decisione presa (2026-09-28)**: implementata la seconda opzione — il form di registrazione autista (`src/app/autista/login/page.tsx`) non richiede più l'upload delle foto patente fronte/retro; chiede solo numero patente e scadenza (quest'ultima prima mancava nel form ed è stata aggiunta, già usata dal monitoraggio scadenze esistente). Le foto già caricate in passato da account di test restano nello storage (nessun dato cancellato senza conferma esplicita); la pagina admin che le mostra continua a funzionare per quei casi legacy, ma non ne verranno più raccolte di nuove.
 
 ---
 

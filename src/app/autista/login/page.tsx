@@ -17,10 +17,12 @@ export default function AutistaLoginPage() {
   const [cognome, setCognome] = useState('');
   
   // Campi Anagrafica Avanzata (Patente & Telefono)
+  // SECURITY-AUDIT.md punto 8: niente più upload della foto patente in fase di
+  // registrazione. Numero + scadenza bastano per il monitoraggio scadenze già
+  // esistente, senza conservare la scansione di un documento d'identità.
   const [telefono, setTelefono] = useState('');
   const [numeroPatente, setNumeroPatente] = useState('');
-  const [fotoFronte, setFotoFronte] = useState<File | null>(null);
-  const [fotoRetro, setFotoRetro] = useState<File | null>(null);
+  const [scadenzaPatente, setScadenzaPatente] = useState('');
 
   // Spunta GDPR (obbligatoria)
   const [accettaPrivacy, setAccettaPrivacy] = useState(false);
@@ -55,8 +57,8 @@ export default function AutistaLoginPage() {
         if (!accettaPrivacy) {
           throw new Error('Devi accettare l\'Informativa sulla Privacy per registrarti.');
         }
-        if (!fotoFronte || !fotoRetro) {
-          throw new Error('Devi caricare entrambe le foto della patente (Fronte e Retro).');
+        if (!scadenzaPatente) {
+          throw new Error('Devi indicare la scadenza della patente.');
         }
 
         // 1. Registrazione in Supabase Auth
@@ -66,22 +68,9 @@ export default function AutistaLoginPage() {
         });
 
         if (signUpError) throw new Error(signUpError.message);
-        
+
         if (authData.user) {
-          // 2. Upload Foto Patente Fronte nel bucket (privato: salviamo solo il percorso,
-          // il link visibile si genera al momento della visualizzazione da parte dell'admin)
-          const extFronte = fotoFronte.name.split('.').pop();
-          const pathFronte = `patenti/${authData.user.id}_fronte.${extFronte}`;
-          const { error: errFronte } = await supabase.storage.from('documenti-veicoli').upload(pathFronte, fotoFronte);
-          if (errFronte) throw new Error('Errore nel caricamento della foto Patente Fronte.');
-
-          // 3. Upload Foto Patente Retro
-          const extRetro = fotoRetro.name.split('.').pop();
-          const pathRetro = `patenti/${authData.user.id}_retro.${extRetro}`;
-          const { error: errRetro } = await supabase.storage.from('documenti-veicoli').upload(pathRetro, fotoRetro);
-          if (errRetro) throw new Error('Errore nel caricamento della foto Patente Retro.');
-
-          // 4. Salvataggio Profilo Autista con prova formale GDPR
+          // 2. Salvataggio Profilo Autista con prova formale GDPR
           const { error: dbError } = await supabase.from('autisti').insert([{
             id: authData.user.id,
             email: email.trim().toLowerCase(),
@@ -89,8 +78,7 @@ export default function AutistaLoginPage() {
             cognome: cognome,
             telefono: telefono,
             numero_patente: numeroPatente,
-            foto_patente_fronte: pathFronte,
-            foto_patente_retro: pathRetro,
+            scadenza_patente: scadenzaPatente,
             stato: 'in_attesa',
             consenso_privacy: true,
             data_accettazione_privacy: new Date().toISOString(),
@@ -173,19 +161,9 @@ export default function AutistaLoginPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Scansione Patente Fronte</label>
-                  <div className="relative">
-                    <input type="file" accept="image/*" required onChange={(e) => setFotoFronte(e.target.files?.[0] || null)} className="w-full bg-white border border-gray-200 text-gray-600 rounded-xl px-3 py-2 text-[11px] font-medium file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-[#E05353] file:text-white hover:file:bg-[#c94545] cursor-pointer"/>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Scansione Patente Retro</label>
-                  <div className="relative">
-                    <input type="file" accept="image/*" required onChange={(e) => setFotoRetro(e.target.files?.[0] || null)} className="w-full bg-white border border-gray-200 text-gray-600 rounded-xl px-3 py-2 text-[11px] font-medium file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-[#E05353] file:text-white hover:file:bg-[#c94545] cursor-pointer"/>
-                  </div>
-                </div>
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Scadenza Patente</label>
+                <input type="date" required value={scadenzaPatente} onChange={(e) => setScadenzaPatente(e.target.value)} className="w-full bg-[#F8F9FB] border border-gray-200 text-[#1E242B] rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-[#E05353]"/>
               </div>
             </>
           )}
@@ -224,7 +202,7 @@ export default function AutistaLoginPage() {
                 <Link href="/privacy" target="_blank" className="text-[#E05353] font-bold hover:underline mx-1">
                   Informativa sulla Privacy (GDPR)
                 </Link>
-                e acconsento al trattamento dei miei dati personali, al caricamento dei miei documenti d'identità e alla geolocalizzazione per finalità lavorative.
+                e acconsento al trattamento dei miei dati personali e alla geolocalizzazione per finalità lavorative.
               </label>
             </div>
           )}
