@@ -30,10 +30,22 @@ function stile(cella: ExcelJS.Cell, opzioni: { bold?: boolean; size?: number; co
   if (opzioni.border !== false) cella.border = SOTTILE;
 }
 
+/** Excel con un solo foglio (es. il foglio CITI, identico all'originale). */
 export async function generaExcelFoglio(foglio: FoglioMese): Promise<Buffer> {
+  return generaExcelFogli([{ nome: 'Presenze', foglio }]);
+}
+
+/** Excel con un foglio di lavoro per ciascun appalto (es. "tutti gli appalti"). */
+export async function generaExcelFogli(fogli: { nome: string; foglio: FoglioMese }[]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'City Cargo';
-  const ws = wb.addWorksheet('Presenze', {
+  for (const { nome, foglio } of fogli) aggiungiFoglio(wb, nome, foglio);
+  const out = await wb.xlsx.writeBuffer();
+  return Buffer.from(out as ArrayBuffer);
+}
+
+function aggiungiFoglio(wb: ExcelJS.Workbook, nome: string, foglio: FoglioMese) {
+  const ws = wb.addWorksheet(nome, {
     pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 1, margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 } },
     views: [{ showGridLines: false }],
   });
@@ -253,7 +265,4 @@ export async function generaExcelFoglio(foglio: FoglioMese): Promise<Buffer> {
     val.numFmt = EURO_SIMBOLO;
     stile(val, { size: 11, bold: chiave === 'Totale', align: 'right' });
   });
-
-  const out = await wb.xlsx.writeBuffer();
-  return Buffer.from(out as ArrayBuffer);
 }

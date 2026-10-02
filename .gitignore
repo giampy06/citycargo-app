@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# OpenCV.js: copiato da node_modules a ogni npm install (scripts/copia-opencv.mjs)
+/public/vendor/

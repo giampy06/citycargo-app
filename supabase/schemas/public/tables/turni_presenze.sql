@@ -20,6 +20,7 @@ CREATE TABLE "public"."turni_presenze" (
   "nome_autista"         text,
   "km_percorsi"          numeric                  DEFAULT 0,
   "da_controllare"       boolean                  NOT NULL DEFAULT false,
+  "bolle_pdf_path"       text,
   CONSTRAINT "turni_presenze_appalto_check" CHECK ((appalto = ANY (ARRAY['CITI'::text, 'EDF'::text, 'RHENUS'::text]))),
   CONSTRAINT "turni_presenze_autista_id_fkey" FOREIGN KEY (autista_id) REFERENCES auth.users(id),
   CONSTRAINT "turni_presenze_codice_verbale_key" UNIQUE (codice_verbale),
@@ -63,3 +64,5 @@ CREATE POLICY "solo_admin_update_diretto_turni" ON "public"."turni_presenze"
   WITH CHECK (public.is_admin());
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."turni_presenze" TO "anon", "authenticated", "postgres", "service_role";
+
+COMMENT ON COLUMN "public"."turni_presenze"."bolle_pdf_path" IS 'Percorso del PDF delle bolle di consegna nel bucket privato bolle-consegna (solo turni RHENUS).';

@@ -171,6 +171,74 @@ Supabase che si sta usando, non un bug nel codice TypeScript.
   implementato** (ha un costo API reale, per quanto minimo, rimandato su
   richiesta esplicita dell'utente).
 
+## Scansione bolle di consegna RHENUS (dal 2026-10-02)
+- **Quando**: al check-out, SOLO se `turni_presenze.appalto = 'RHENUS'` (colonna
+  `appalto`, text NOT NULL, CHECK `CITI`/`EDF`/`RHENUS`). RHENUS è tornato tra gli
+  appalti del check-in: non ha tariffa, quindi il turno parte `da_controllare` con
+  importo 0 e l'importo lo inserisce l'admin. La scansione è **facoltativa**: chiudere
+  senza bolle chiede conferma.
+- **Flusso**: una foto per bolla (`<input capture="environment">`), rilevamento
+  automatico dei bordi, poi **sempre** l'editor con i 4 angoli trascinabili (con lente
+  d'ingrandimento), raddrizzamento e bianco/nero, elenco pagine con anteprima, elimina
+  e rifai. Alla chiusura tutte le pagine diventano UN PDF A4 (jsPDF), caricato **prima**
+  di `chiudi_turno`: l'upload richiede un turno ancora aperto.
+- **Libreria**: OpenCV.js 5.0 (`@techstark/opencv-js`, versione esatta in
+  package.json). `scripts/copia-opencv.mjs` (postinstall) lo copia in
+  `public/vendor/opencv-<versione>.js` (ignorato da git ed eslint), servito dal nostro
+  dominio con cache immutabile (`next.config.ts`). Pesa ~13 MB (~3,8 MB compressi) e si
+  scarica solo nel check-out RHENUS, una volta sola, in background appena si apre la
+  pagina. Se in futuro si aggiunge una CSP completa, serve `'wasm-unsafe-eval'` in
+  `script-src`.
+- **Codice**: `src/lib/scanner/opencv.ts` (caricamento), `elabora.ts` (rilevamento,
+  raddrizzamento, bianco/nero), `pdf.ts` (jsPDF); `src/components/scanner/`
+  (`BolleScanner`, `EditorAngoli`). Il check-out carica lo scanner con `next/dynamic`.
+- **Rilevamento bordi**: 3 strategie (Canny fisso, Canny con soglie dalla mediana,
+  Otsu), tiene il quadrilatero convesso plausibile più grande che sia almeno 15 livelli
+  più chiaro di ciò che lo circonda. Questo scarta i riquadri stampati dentro la bolla,
+  come la tabella. Esiti: `trovato`, `incerto` (1-2 angoli sul bordo della foto, foglio
+  tagliato) e `non_trovato` (rettangolo di partenza da sistemare a mano). Tarato su foto
+  sintetiche con proiezione da fotocamera reale: va ricontrollato con foto vere.
+- **Proporzioni**: metodo di Zhang & He (stima della focale dai 4 angoli). Se la stima
+  non è credibile, si ripiega su una focale tipica da telefono (0,6 × diagonale foto).
+  Errore mediano ~1% contro ~16% del semplice "misura i lati".
+- **Limiti**: ~300 KB per bolla (misurato), max **50 bolle per turno** (≈15 MB, sotto i
+  20 MB del bucket) e controllo della dimensione prima dell'upload. Dopo il
+  raddrizzamento si taglia lo 0,8% per lato, per togliere il filo di tavolo che
+  diventerebbe una riga nera.
+- **Bianco/nero**: lo sfondo carta è stimato con dilatazione + mediana e diviso via
+  (toglie ombre e luce non uniforme), poi soglia Otsu. Limite noto: le grandi aree scure
+  piene (es. un logo bianco su riquadro blu) escono "a contorno".
+- **Database**: colonna `turni_presenze.bolle_pdf_path` (solo il PERCORSO). Bucket
+  privato `bolle-consegna` (solo PDF, max 20 MB), percorso
+  `turni/<id-turno>/bolle-<timestamp>.pdf`. Policy: upload solo nella cartella del
+  proprio turno aperto RHENUS; lettura admin o autista del turno; modifica e
+  cancellazione solo admin. Tutte `TO authenticated`, tutte permissive con la condizione
+  completa.
+- **Funzione** `allega_bolle_turno(p_turno_id, p_path)` (SECURITY DEFINER, EXECUTE solo
+  `authenticated`): collega il PDF al turno solo se il turno è dell'utente, aperto e
+  RHENUS, se il percorso sta nella cartella di quel turno e se il file esiste davvero nel
+  bucket. SQL: `supabase/migrazioni_manuali/2026-10-02_bolle_rhenus.sql`.
+- **Admin (tutto in Presenze, nessuna sezione separata)**: ogni turno con
+  `bolle_pdf_path` ha il pulsante "Bolle", e ogni giornata con bolle ha "Bolle del
+  giorno" che scarica un .zip (fflate) con un PDF per turno. Ogni PDF si scarica come
+  `NOMEAUTISTA-TARGA-DATA.pdf`, es. `MARCO_TOGNI-GH482KL-02-10-2026.pdf`: maiuscolo,
+  senza accenti né spazi, data italiana. Il nome lo imposta il link firmato
+  (`download`), mentre il file nello storage resta in `turni/<id>/`. Se lo stesso
+  autista fa più turni RHENUS con lo stesso furgone nello stesso giorno si aggiunge
+  `-2`, `-3`... Logica in `src/lib/bolle.ts`. Anche l'autista, dal check-out, scarica
+  il PDF con lo stesso nome.
+
+## Presenze divise per appalto (dal 2026-10-02)
+- Schede Tutti / CITI / EDF / RHENUS (filtro sui turni del mese, con conteggi).
+- Il pulsante Excel segue la scheda attiva. `/api/export-foglio-presenze?appalto=`
+  accetta `CITI` (default, il foglio originale identico a prima, foglio "Presenze"),
+  `EDF`, `RHENUS` o `TUTTI` (un foglio di lavoro per appalto). `costruisciFoglio`
+  accetta `appalto` (default CITI): tariffe ed extra di quell'appalto. Senza lettera in
+  tariffa, la cella mostra l'iniziale dell'appalto (E, R); RHENUS non ha tariffe, quindi
+  l'importo è quello inserito dall'admin e la cella resta rossa finché è "da
+  controllare".
+- La pagina "Foglio mese" (anteprima e gestione extra) resta solo CITI.
+
 ## Da fare / da tenere d'occhio
 - Esiste un secondo progetto Vercel duplicato "citycargo-flotta" collegato
   allo stesso repo — è inutilizzato, dà sempre errore di build, andrebbe

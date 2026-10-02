@@ -119,3 +119,29 @@ CREATE POLICY "restringi_scrittura_documenti_veicoli" ON "storage"."objects"
   FOR INSERT
   TO "authenticated"
   WITH CHECK (((bucket_id <> 'documenti-veicoli'::text) OR public.is_admin() OR (name ~~ (('patenti/'::text || (auth.uid())::text) || '_%'::text))));
+
+-- Bucket privato bolle-consegna (scansione bolle RHENUS, 2026-10-02):
+-- supabase/migrazioni_manuali/2026-10-02_bolle_rhenus.sql
+CREATE POLICY "autisti_upload_bolle_proprio_turno" ON "storage"."objects"
+  FOR INSERT
+  TO "authenticated"
+  WITH CHECK (((bucket_id = 'bolle-consegna'::text) AND ((storage.foldername(name))[1] = 'turni'::text) AND (EXISTS ( SELECT 1
+   FROM public.turni_presenze tp
+  WHERE (((tp.id)::text = (storage.foldername(objects.name))[2]) AND (tp.autista_id = auth.uid()) AND (tp.stato = 'aperto'::text) AND (tp.appalto = 'RHENUS'::text))))));
+
+CREATE POLICY "lettura_bolle_admin_o_proprio_turno" ON "storage"."objects"
+  FOR SELECT
+  TO "authenticated"
+  USING (((bucket_id = 'bolle-consegna'::text) AND (public.is_admin() OR (EXISTS ( SELECT 1
+   FROM public.turni_presenze tp
+  WHERE (((tp.id)::text = (storage.foldername(objects.name))[2]) AND (tp.autista_id = auth.uid())))))));
+
+CREATE POLICY "admin_modifica_bolle" ON "storage"."objects"
+  FOR UPDATE
+  TO "authenticated"
+  USING (((bucket_id = 'bolle-consegna'::text) AND public.is_admin()));
+
+CREATE POLICY "admin_cancella_bolle" ON "storage"."objects"
+  FOR DELETE
+  TO "authenticated"
+  USING (((bucket_id = 'bolle-consegna'::text) AND public.is_admin()));

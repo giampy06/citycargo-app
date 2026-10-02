@@ -24,7 +24,7 @@ export default function CheckinPage() {
 
   // Dati Turno
   const [targa, setTarga] = useState('');
-  const [appalto, setAppalto] = useState<'CITI' | 'EDF'>('CITI');
+  const [appalto, setAppalto] = useState<'CITI' | 'EDF' | 'RHENUS'>('CITI');
   const [giri, setGiri] = useState<string[]>([]);
   const [giroSel, setGiroSel] = useState('');
   const [errGiri, setErrGiri] = useState<string | null>(null);
@@ -303,6 +303,9 @@ export default function CheckinPage() {
                 >
                   <option value="CITI">CITI</option>
                   <option value="EDF">EDF</option>
+                  {/* RHENUS: niente tariffa fissa, il turno parte "da controllare" e l'importo
+                      lo inserisce l'admin. A fine turno si scansionano le bolle di consegna. */}
+                  <option value="RHENUS">RHENUS</option>
                 </select>
               </div>
 

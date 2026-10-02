@@ -24,6 +24,13 @@ const nextConfig: NextConfig = {
           { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
         ],
       },
+      {
+        // OpenCV.js (~13 MB) per la scansione bolle: il nome del file contiene la
+        // versione, quindi può restare in cache "per sempre" sul telefono
+        // dell'autista — lo scarica una volta sola, non a ogni turno.
+        source: '/vendor/:file*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
     ];
   },
 };

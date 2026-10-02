@@ -1,19 +1,45 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/supabase';
 import { CheckSquare, Loader2, AlertCircle, Gauge, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { creaPdfBolle, type PaginaBolla } from '@/lib/scanner/pdf';
+import { nomeFileBolle } from '@/lib/bolle';
+
+// Lo scanner (e il suo OpenCV) serve solo ai turni RHENUS: non appesantisce gli altri check-out.
+const BolleScanner = dynamic(() => import('@/components/scanner/BolleScanner'), { ssr: false });
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [turnoAperto, setTurnoAperto] = useState<any | null>(null);
   const [kmFine, setKmFine] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Bolle di consegna (solo RHENUS)
+  const [pagineBolle, setPagineBolle] = useState<PaginaBolla[]>([]);
+  const [fase, setFase] = useState<string | null>(null);
+  const [nomeAutista, setNomeAutista] = useState('');
+  // Se il PDF è già stato caricato e collegato al turno ma la chiusura fallisce,
+  // al nuovo tentativo non lo ricarichiamo (a meno che le pagine siano cambiate).
+  const bolleGiaAllegate = useRef<string | null>(null);
+  // Libera le anteprime delle pagine quando si lascia la pagina.
+  const pagineRef = useRef<PaginaBolla[]>([]);
+  useEffect(() => {
+    pagineRef.current = pagineBolle;
+  }, [pagineBolle]);
+  useEffect(() => () => pagineRef.current.forEach((p) => URL.revokeObjectURL(p.url)), []);
+
+  const isRhenus = turnoAperto?.appalto === 'RHENUS';
+  const nomeFilePdf = isRhenus ? nomeFileBolle(nomeAutista, turnoAperto.targa_mezzo, turnoAperto.created_at) : '';
+  const titoloPdf = isRhenus ? `Bolle RHENUS ${nomeAutista} ${turnoAperto.targa_mezzo} ${turnoAperto.codice_verbale}` : '';
 
   useEffect(() => {
     async function fetchTurnoAperto() {
@@ -34,6 +60,11 @@ export default function CheckoutPage() {
         setErrorMsg('Nessun turno attivo trovato per oggi.');
       } else {
         setTurnoAperto(data);
+        // Nome e cognome dall'anagrafica, per il nome del PDF delle bolle (RHENUS).
+        if (data.appalto === 'RHENUS') {
+          const { data: autista } = await supabase.from('autisti').select('nome, cognome').eq('id', session.user.id).maybeSingle();
+          setNomeAutista(autista ? `${autista.nome} ${autista.cognome}` : data.nome_autista || '');
+        }
       }
       setLoading(false);
     }
@@ -56,6 +87,44 @@ export default function CheckoutPage() {
 
       const kmPercorsi = kmFineNum - kmInizioNum;
 
+      if (isRhenus) {
+        if (pagineBolle.length === 0) {
+          const ok = await confirm(
+            'Non hai scansionato nessuna bolla di consegna. Vuoi chiudere il turno RHENUS senza bolle?',
+            { titolo: 'Nessuna bolla', confermaLabel: 'Chiudi senza bolle', annullaLabel: 'Torna a scansionare' }
+          );
+          if (!ok) return;
+        } else {
+          const firma = pagineBolle.map((p) => p.id).join(',');
+          if (bolleGiaAllegate.current !== firma) {
+            setFase('Creo il PDF delle bolle...');
+            const pdf = await creaPdfBolle(pagineBolle, titoloPdf);
+            // Il bucket accetta PDF fino a 20 MB: meglio un messaggio chiaro che un rifiuto tecnico.
+            if (pdf.size > 19.5 * 1024 * 1024) {
+              throw new Error('Il PDF delle bolle supera i 20 MB: elimina qualche pagina e riprova.');
+            }
+
+            // Bucket privato: nel database va solo il PERCORSO, il link si genera
+            // (firmato e temporaneo) quando l'admin lo scarica.
+            setFase('Carico le bolle...');
+            const percorso = `turni/${turnoAperto.id}/bolle-${Date.now()}.pdf`;
+            const { error: upErr } = await supabase.storage
+              .from('bolle-consegna')
+              .upload(percorso, pdf, { contentType: 'application/pdf', upsert: false });
+            if (upErr) throw new Error(`Bolle non caricate: ${upErr.message}. Il turno è ancora aperto, riprova.`);
+
+            const { error: allegaErr } = await supabase.rpc('allega_bolle_turno', {
+              p_turno_id: turnoAperto.id,
+              p_path: percorso,
+            });
+            if (allegaErr) throw new Error(`Bolle caricate ma non collegate al turno: ${allegaErr.message}. Riprova.`);
+            bolleGiaAllegate.current = firma;
+          }
+        }
+      }
+
+      setFase('Chiudo il turno...');
+
       // chiudi_turno (SECURITY DEFINER) chiude il turno e riporta il veicolo
       // "disponibile" con i km aggiornati in un'unica operazione lato server,
       // verificando che il turno appartenga davvero a chi chiama.
@@ -66,12 +135,16 @@ export default function CheckoutPage() {
 
       if (error) throw new Error(`Impossibile chiudere il turno: ${error.message}`);
 
-      toast(`Turno chiuso con successo! Percorsi ${kmPercorsi} km.`, 'success');
+      const notaBolle = isRhenus && pagineBolle.length > 0
+        ? ` Bolle archiviate: ${pagineBolle.length} ${pagineBolle.length === 1 ? 'pagina' : 'pagine'}.`
+        : '';
+      toast(`Turno chiuso con successo! Percorsi ${kmPercorsi} km.${notaBolle}`, 'success');
       router.push('/autista');
     } catch (err: any) {
       setErrorMsg(err.message || 'Errore durante la chiusura del turno.');
     } finally {
       setSubmitting(false);
+      setFase(null);
     }
   };
 
@@ -141,6 +214,18 @@ export default function CheckoutPage() {
               </div>
             </div>
 
+            {isRhenus && (
+              <div className="p-4 bg-[#F8F9FB] rounded-2xl">
+                <BolleScanner
+                  pagine={pagineBolle}
+                  onPagineChange={setPagineBolle}
+                  nomeFilePdf={nomeFilePdf}
+                  titoloPdf={titoloPdf}
+                  disabilitato={submitting}
+                />
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={submitting}
@@ -149,7 +234,7 @@ export default function CheckoutPage() {
               {submitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Registrazione in corso...
+                  {fase || 'Registrazione in corso...'}
                 </>
               ) : (
                 <>

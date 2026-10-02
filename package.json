@@ -6,15 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "node scripts/copia-opencv.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.20.0",
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.112.4",
+    "@techstark/opencv-js": "5.0.0-release.1",
     "browser-image-compression": "^2.0.2",
     "canvas-confetti": "^1.9.4",
     "exceljs": "^4.4.0",
+    "fflate": "0.8.3",
+    "jspdf": "4.2.1",
     "lucide-react": "^1.38.0",
     "next": "16.3.4",
     "react": "19.2.8",

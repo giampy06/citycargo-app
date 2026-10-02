@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // OpenCV.js copiato da node_modules a ogni install (scripts/copia-opencv.mjs).
+    "public/vendor/**",
   ]),
 ]);
 

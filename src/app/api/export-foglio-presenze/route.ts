@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { costruisciFoglio } from '@/lib/foglioPresenze';
-import { generaExcelFoglio } from '@/lib/foglioExcel';
+import { APPALTI_FOGLIO, costruisciFoglio, type AppaltoFoglio } from '@/lib/foglioPresenze';
+import { generaExcelFoglio, generaExcelFogli } from '@/lib/foglioExcel';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -12,6 +12,12 @@ export async function GET(req: NextRequest) {
   if (!Number.isInteger(anno) || anno < 2020 || anno > 2100 || !Number.isInteger(mese) || mese < 1 || mese > 12) {
     return NextResponse.json({ error: 'Parametri anno/mese non validi.' }, { status: 400 });
   }
+  // CITI (default, il foglio originale), EDF, RHENUS, oppure TUTTI = un foglio per appalto.
+  const appaltoRichiesto = (req.nextUrl.searchParams.get('appalto') || 'CITI').toUpperCase();
+  if (appaltoRichiesto !== 'TUTTI' && !APPALTI_FOGLIO.includes(appaltoRichiesto as AppaltoFoglio)) {
+    return NextResponse.json({ error: 'Appalto non valido.' }, { status: 400 });
+  }
+  const appalti: AppaltoFoglio[] = appaltoRichiesto === 'TUTTI' ? APPALTI_FOGLIO : [appaltoRichiesto as AppaltoFoglio];
 
   // Solo gli amministratori: verifica con il token di chi chiama, poi legge i dati con
   // lo stesso token (le regole RLS restano attive, nessuna chiave privilegiata).
@@ -42,8 +48,8 @@ export async function GET(req: NextRequest) {
       .gte('created_at', inizio)
       .lt('created_at', fine),
     supabase.from('autisti').select('id, nome, cognome'),
-    supabase.from('tariffe_giri').select('nome, codice, importo, appalto, ordine').eq('appalto', 'CITI'),
-    supabase.from('extra_servizi').select('id, data, descrizione, importo, autista_id').eq('appalto', 'CITI').gte('data', primoGiorno).lte('data', ultimoGiorno),
+    supabase.from('tariffe_giri').select('nome, codice, importo, appalto, ordine').in('appalto', appalti),
+    supabase.from('extra_servizi').select('id, data, descrizione, importo, autista_id, appalto').in('appalto', appalti).gte('data', primoGiorno).lte('data', ultimoGiorno),
   ]);
 
   // Se manca la tabella degli extra un file senza extra avrebbe i totali sbagliati: meglio fermarsi.
@@ -53,17 +59,23 @@ export async function GET(req: NextRequest) {
   const errore = turni.error || autisti.error || tariffe.error || extra.error;
   if (errore) return NextResponse.json({ error: `Lettura dati non riuscita: ${errore.message}` }, { status: 500 });
 
-  const foglio = costruisciFoglio({
-    anno,
-    mese,
-    turni: turni.data || [],
-    autisti: autisti.data || [],
-    tariffe: tariffe.data || [],
-    extraManuali: extra.data || [],
-  });
+  const fogli = appalti.map((appalto) => ({
+    nome: appalto,
+    foglio: costruisciFoglio({
+      anno,
+      mese,
+      turni: turni.data || [],
+      autisti: autisti.data || [],
+      tariffe: tariffe.data || [],
+      extraManuali: (extra.data || []).filter((e) => e.appalto === appalto),
+      appalto,
+    }),
+  }));
 
-  const buffer = await generaExcelFoglio(foglio);
-  const nomeFile = `Presenze_CITI_${anno}-${String(mese).padStart(2, '0')}.xlsx`;
+  // Il solo CITI resta identico al file di sempre (un foglio "Presenze"); EDF, RHENUS e
+  // TUTTI hanno un foglio di lavoro per appalto, con il nome dell'appalto.
+  const buffer = appaltoRichiesto === 'CITI' ? await generaExcelFoglio(fogli[0].foglio) : await generaExcelFogli(fogli);
+  const nomeFile = `Presenze_${appaltoRichiesto}_${anno}-${String(mese).padStart(2, '0')}.xlsx`;
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {

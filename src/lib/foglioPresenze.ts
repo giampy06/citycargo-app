@@ -55,6 +55,9 @@ export type FoglioMese = {
 
 export const ALIQUOTA_IVA = 0.22;
 
+export type AppaltoFoglio = 'CITI' | 'EDF' | 'RHENUS';
+export const APPALTI_FOGLIO: AppaltoFoglio[] = ['CITI', 'EDF', 'RHENUS'];
+
 const MESI = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
 const SIGLE = ['DOM', 'LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB'];
 
@@ -70,10 +73,12 @@ export function dataItaliana(timestamp: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date(timestamp));
 }
 
-// Lettera mostrata nella griglia: quella della tariffa, altrimenti le prime 2 lettere del nome.
-export function codiceGiro(nome: string, tariffe: TariffaFoglio[]): string {
+// Lettera mostrata nella griglia: quella della tariffa. Senza lettera: per CITI le prime
+// 2 lettere del nome del giro; per EDF e RHENUS l'iniziale dell'appalto (E, R).
+export function codiceGiro(nome: string, tariffe: TariffaFoglio[], appalto: AppaltoFoglio = 'CITI'): string {
   const t = tariffe.find((x) => x.nome === nome);
   if (t?.codice) return t.codice;
+  if (appalto !== 'CITI') return appalto[0];
   return nome.trim().slice(0, 2).toUpperCase() || '?';
 }
 
@@ -82,10 +87,13 @@ export function costruisciFoglio(opzioni: {
   mese: number; // 1-12
   turni: TurnoFoglio[];
   autisti: AutistaFoglio[];
-  tariffe: TariffaFoglio[]; // solo CITI
-  extraManuali: ExtraManuale[];
+  tariffe: TariffaFoglio[]; // vengono usate solo quelle dell'appalto del foglio
+  extraManuali: ExtraManuale[]; // già filtrati per appalto da chi chiama
+  /** Appalto del foglio (default CITI, il foglio originale). */
+  appalto?: AppaltoFoglio;
 }): FoglioMese {
   const { anno, mese, turni, autisti, tariffe, extraManuali } = opzioni;
+  const appalto = opzioni.appalto ?? 'CITI';
   const nGiorni = new Date(anno, mese, 0).getDate();
   const prefisso = `${anno}-${String(mese).padStart(2, '0')}-`;
 
@@ -95,9 +103,9 @@ export function costruisciFoglio(opzioni: {
   });
   const giorniLavorativi = giorni.filter((g) => !g.weekend).length;
 
-  const tariffeCiti = tariffe.filter((t) => t.appalto === 'CITI');
+  const tariffeAppalto = tariffe.filter((t) => t.appalto === appalto);
   const eExtra = (giro: string | null) => {
-    const t = tariffeCiti.find((x) => x.nome === giro);
+    const t = tariffeAppalto.find((x) => x.nome === giro);
     return !!t && t.importo === null;
   };
 
@@ -106,9 +114,9 @@ export function costruisciFoglio(opzioni: {
     return a ? `${a.nome} ${a.cognome}`.trim() : fallback || 'Autista';
   };
 
-  // Solo CITI e solo il mese richiesto (data italiana).
+  // Solo l'appalto del foglio e solo il mese richiesto (data italiana).
   const turniMese = turni
-    .filter((t) => t.appalto === 'CITI')
+    .filter((t) => t.appalto === appalto)
     .map((t) => ({ ...t, giorno: dataItaliana(t.created_at) }))
     .filter((t) => t.giorno.startsWith(prefisso))
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -166,7 +174,7 @@ export function costruisciFoglio(opzioni: {
       }
 
       for (const [g, lista] of perGiorno) {
-        const lettere = [...new Set(lista.map((t) => codiceGiro(t.giro || 'Giro Standard', tariffeCiti)))];
+        const lettere = [...new Set(lista.map((t) => codiceGiro(t.giro || 'Giro Standard', tariffeAppalto, appalto)))];
         celle[g - 1] = { testo: lettere.join('/'), daControllare: lista.some((t) => !!t.da_controllare) };
         presentiPerGiorno[g - 1] += 1;
       }
@@ -182,10 +190,10 @@ export function costruisciFoglio(opzioni: {
       };
     });
 
-  const legenda = tariffeCiti
+  const legenda = tariffeAppalto
     .filter((t) => t.importo !== null)
     .sort((a, b) => num(a.ordine) - num(b.ordine))
-    .map((t) => ({ codice: codiceGiro(t.nome, tariffeCiti), nome: t.nome, importo: num(t.importo) }));
+    .map((t) => ({ codice: codiceGiro(t.nome, tariffeAppalto, appalto), nome: t.nome, importo: num(t.importo) }));
 
   const giri = arrotonda(righe.reduce((s, r) => s + r.importo, 0));
   const totExtra = arrotonda(extra.reduce((s, e) => s + e.importo, 0));
@@ -195,7 +203,8 @@ export function costruisciFoglio(opzioni: {
   return {
     anno,
     mese,
-    titolo: `${MESI[mese - 1]} ${anno}`,
+    // Il foglio CITI resta identico all'originale; gli altri riportano l'appalto nel titolo.
+    titolo: appalto === 'CITI' ? `${MESI[mese - 1]} ${anno}` : `${MESI[mese - 1]} ${anno} · ${appalto}`,
     giorni,
     giorniLavorativi,
     presentiPerGiorno,

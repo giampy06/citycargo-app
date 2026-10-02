@@ -4,7 +4,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, getPrivateFileUrl } from '@/supabase';
-import { scaricaFoglioExcel } from '@/lib/scaricaFoglio';
+import { scaricaFoglioExcel, type AppaltoExport } from '@/lib/scaricaFoglio';
+import { assegnaNomiFileBolle, dataTurno, scaricaPdfBolle, scaricaZipBolle } from '@/lib/bolle';
 import {
   Calendar,
   ChevronLeft,
@@ -28,6 +29,7 @@ import {
   Camera,
   ExternalLink,
   MapPin,
+  FileDown,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
@@ -39,6 +41,11 @@ export default function ArchivioPresenzePage() {
   const [turni, setTurni] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [ricerca, setRicerca] = useState('');
+  // Scheda appalto: tutti insieme oppure CITI / EDF / RHENUS separati.
+  const [tabAppalto, setTabAppalto] = useState<AppaltoExport>('TUTTI');
+  // Nome e cognome dall'anagrafica (per i nomi dei PDF delle bolle).
+  const [nomiAutisti, setNomiAutisti] = useState<Record<string, string>>({});
+  const [scaricandoZip, setScaricandoZip] = useState<string | null>(null);
 
   // Modifica turno (targa/km finali)
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -73,6 +80,11 @@ export default function ArchivioPresenzePage() {
 
       if (error) throw error;
       setTurni(data || []);
+
+      const aRes = await supabase.from('autisti').select('id, nome, cognome');
+      if (!aRes.error) {
+        setNomiAutisti(Object.fromEntries((aRes.data || []).map((a) => [a.id, `${a.nome} ${a.cognome}`.trim()])));
+      }
 
       // Tariffe per correggere giro/importo (se la tabella non c'è ancora, la pagina funziona lo stesso).
       const tRes = await supabase.from('tariffe_giri').select('nome, importo, appalto').eq('attivo', true).order('ordine');
@@ -116,6 +128,32 @@ export default function ArchivioPresenzePage() {
       setVerbaliFoto([]);
     } finally {
       setLoadingFoto(false);
+    }
+  };
+
+  // Bolle di consegna RHENUS: un PDF per turno, scaricato come NOMEAUTISTA-TARGA-DATA.pdf.
+  const handleScaricaBolle = async (turno: { id: string; bolle_pdf_path: string }) => {
+    try {
+      await scaricaPdfBolle(turno.bolle_pdf_path, nomiFileBolle[turno.id]);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Download non riuscito.', 'error');
+    }
+  };
+
+  // Tutte le bolle di una giornata in un unico .zip (un PDF per turno, stessi nomi).
+  const handleScaricaBolleGiorno = async (gruppo: { data: string; turni: { id: string; created_at: string; bolle_pdf_path: string | null }[] }) => {
+    const conBolle = gruppo.turni.filter((t) => t.bolle_pdf_path);
+    if (conBolle.length === 0) return;
+    setScaricandoZip(gruppo.data);
+    try {
+      await scaricaZipBolle(
+        conBolle.map((t) => ({ percorso: t.bolle_pdf_path as string, nomeFile: nomiFileBolle[t.id] })),
+        `BOLLE_RHENUS-${dataTurno(conBolle[0].created_at)}.zip`
+      );
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Download non riuscito.', 'error');
+    } finally {
+      setScaricandoZip(null);
     }
   };
 
@@ -198,21 +236,46 @@ export default function ArchivioPresenzePage() {
     }
   };
 
-  // 1. Filtra turni per il mese selezionato
+  // 1. Turni del mese selezionato (tutti gli appalti), poi ricerca e scheda appalto
+  const turniMese = useMemo(
+    () =>
+      turni.filter((t) => {
+        const d = new Date(t.created_at);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      }),
+    [turni, currentMonth, currentYear]
+  );
+
+  const conteggiAppalto = useMemo(() => {
+    const c: Record<string, number> = { TUTTI: turniMese.length, CITI: 0, EDF: 0, RHENUS: 0 };
+    turniMese.forEach((t) => {
+      if (t.appalto in c) c[t.appalto] += 1;
+    });
+    return c;
+  }, [turniMese]);
+
   const turniDelMese = useMemo(() => {
-    return turni.filter((t) => {
-      const d = new Date(t.created_at);
-      const matchMonth = d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-      const query = ricerca.toLowerCase();
-      const matchRicerca = !ricerca || 
+    const query = ricerca.toLowerCase();
+    return turniMese.filter((t) => {
+      if (tabAppalto !== 'TUTTI' && t.appalto !== tabAppalto) return false;
+      return (
+        !ricerca ||
         t.nome_autista?.toLowerCase().includes(query) ||
+        (t.autista_id && nomiAutisti[t.autista_id]?.toLowerCase().includes(query)) ||
         t.targa_mezzo?.toLowerCase().includes(query) ||
         t.appalto?.toLowerCase().includes(query) ||
-        t.giro?.toLowerCase().includes(query);
-
-      return matchMonth && matchRicerca;
+        t.giro?.toLowerCase().includes(query)
+      );
     });
-  }, [turni, currentMonth, currentYear, ricerca]);
+  }, [turniMese, ricerca, tabAppalto, nomiAutisti]);
+
+  // Nomi dei PDF delle bolle, calcolati su tutto il mese (non sui filtri) così restano stabili.
+  // Pochi turni al mese: calcolo diretto, senza memo.
+  const nomiFileBolle = assegnaNomiFileBolle(
+    turniMese,
+    (t: { autista_id?: string | null; nome_autista?: string | null }) =>
+      (t.autista_id && nomiAutisti[t.autista_id]) || t.nome_autista || 'Autista'
+  );
 
   // 2. Raggruppa i turni giorno per giorno (Sottogruppi giornalieri)
   const presenzeRaggruppatePerGiorno = useMemo(() => {
@@ -242,12 +305,12 @@ export default function ArchivioPresenzePage() {
   const totaleRetribuzioniMese = turniDelMese.reduce((acc, t) => acc + (Number(t.compenso_giornaliero) || 0), 0);
   const daControllareMese = turniDelMese.filter((t) => t.da_controllare).length;
 
-  // 4. Esportazione: foglio presenze CITI in Excel (stesso file della pagina "Foglio mese")
+  // 4. Esportazione Excel: dell'appalto della scheda attiva, oppure di tutti (un foglio per appalto)
   const [esportando, setEsportando] = useState(false);
   const handleExportExcelMensile = async () => {
     setEsportando(true);
     try {
-      await scaricaFoglioExcel(currentYear, currentMonth + 1);
+      await scaricaFoglioExcel(currentYear, currentMonth + 1, tabAppalto);
     } catch (err: any) {
       toast(`Esportazione non riuscita: ${err.message}`, 'error');
     } finally {
@@ -291,10 +354,10 @@ export default function ArchivioPresenzePage() {
             <button
               onClick={handleExportExcelMensile}
               disabled={esportando}
-              title="Scarica direttamente l'Excel del mese in corso"
+              title={tabAppalto === 'TUTTI' ? 'Excel del mese con un foglio per appalto (CITI, EDF, RHENUS)' : `Excel del mese solo ${tabAppalto}`}
               className="h-10 px-4 rounded-2xl bg-gray-50 hover:bg-gray-100 disabled:opacity-50 text-gray-700 font-bold text-xs flex items-center gap-1.5 transition-colors whitespace-nowrap"
             >
-              {esportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Esporta<span className="hidden sm:inline"> Excel</span>
+              {esportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Excel {tabAppalto === 'TUTTI' ? 'tutti' : tabAppalto}
             </button>
             <Link
               href="/presenze/foglio"
@@ -327,6 +390,26 @@ export default function ArchivioPresenzePage() {
           >
             <ChevronRight className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Schede appalto */}
+        <div className="bg-white rounded-3xl p-2 border border-gray-100 shadow-sm grid grid-cols-4 gap-1" role="tablist" aria-label="Appalto">
+          {(['TUTTI', 'CITI', 'EDF', 'RHENUS'] as AppaltoExport[]).map((ap) => (
+            <button
+              key={ap}
+              role="tab"
+              aria-selected={tabAppalto === ap}
+              onClick={() => setTabAppalto(ap)}
+              className={`min-w-0 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-black transition-colors flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 ${
+                tabAppalto === ap ? 'bg-[#1E242B] text-white' : 'text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              {ap === 'TUTTI' ? 'Tutti' : ap}
+              <span className={`text-[10px] font-bold rounded-full px-1.5 ${tabAppalto === ap ? 'bg-white/20' : 'bg-gray-100'}`}>
+                {conteggiAppalto[ap]}
+              </span>
+            </button>
+          ))}
         </div>
 
         {/* 3 KPI Riepilogo Mese */}
@@ -375,7 +458,9 @@ export default function ArchivioPresenzePage() {
         ) : presenzeRaggruppatePerGiorno.length === 0 ? (
           <div className="py-16 text-center text-xs text-gray-400 bg-white rounded-3xl border border-gray-100 p-8 space-y-2">
             <FolderCheck className="w-8 h-8 text-gray-300 mx-auto" />
-            <p className="font-bold text-gray-700">Nessuna presenza registrata in questo mese</p>
+            <p className="font-bold text-gray-700">
+              {tabAppalto === 'TUTTI' ? 'Nessuna presenza registrata in questo mese' : `Nessun turno ${tabAppalto} registrato in questo mese`}
+            </p>
             <p className="text-[11px]">I turni degli autisti compariranno qui suddivisi automaticamente per ciascun giorno di lavoro.</p>
           </div>
         ) : (
@@ -393,7 +478,18 @@ export default function ArchivioPresenzePage() {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-3 text-xs font-semibold text-gray-600">
+                  <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-gray-600">
+                    {gruppo.turni.some((t) => t.bolle_pdf_path) && (
+                      <button
+                        onClick={() => handleScaricaBolleGiorno(gruppo)}
+                        disabled={scaricandoZip === gruppo.data}
+                        title="Scarica in un .zip tutte le bolle RHENUS di questa giornata (un PDF per turno)"
+                        className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-60 border border-emerald-200 px-2.5 py-1.5 rounded-xl transition-colors"
+                      >
+                        {scaricandoZip === gruppo.data ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+                        Bolle del giorno ({gruppo.turni.filter((t) => t.bolle_pdf_path).length})
+                      </button>
+                    )}
                     <span>Km Giorno: <b className="text-[#1E242B]">+{gruppo.totaleKm} km</b></span>
                     {gruppo.totaleCompensi > 0 && (
                       <span>Importi: <b className="text-emerald-600">€ {gruppo.totaleCompensi.toFixed(2)}</b></span>
@@ -420,7 +516,7 @@ export default function ArchivioPresenzePage() {
                       {gruppo.turni.map((t) => (
                         <tr key={t.id} className="hover:bg-gray-50/50 transition">
                           <td className="py-3 font-bold text-gray-800 capitalize">
-                            {t.nome_autista || 'Autista'}
+                            {(t.autista_id && nomiAutisti[t.autista_id]) || t.nome_autista || 'Autista'}
                           </td>
                           <td className="py-3 font-mono font-bold text-[#1E242B]">
                             {editingId === t.id ? (
@@ -537,6 +633,15 @@ export default function ArchivioPresenzePage() {
                               </div>
                             ) : (
                               <div className="flex items-center justify-end gap-1">
+                                {t.bolle_pdf_path && (
+                                  <button
+                                    onClick={() => handleScaricaBolle(t)}
+                                    className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg transition-colors"
+                                    title="Scarica bolle RHENUS"
+                                  >
+                                    <FileDown className="w-3.5 h-3.5" /> Bolle
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => handleOpenPhotoInspection(t)}
                                   className="text-gray-400 hover:text-[#E05353] p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
@@ -594,7 +699,7 @@ export default function ArchivioPresenzePage() {
                   </span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  Conducente: <b className="text-gray-700 capitalize">{selectedTurno.nome_autista}</b> | Appalto: <b>{selectedTurno.appalto}</b>
+                  Conducente: <b className="text-gray-700 capitalize">{(selectedTurno.autista_id && nomiAutisti[selectedTurno.autista_id]) || selectedTurno.nome_autista}</b> | Appalto: <b>{selectedTurno.appalto}</b>
                 </p>
               </div>
               <button
