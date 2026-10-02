@@ -79,4 +79,4 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION "public"."avvia_turno"(text, text, numeric, text, text, text, text) TO PUBLIC, "anon", "authenticated", "postgres", "service_role";
+GRANT EXECUTE ON FUNCTION "public"."avvia_turno"(text, text, numeric, text, text, text, text) TO "authenticated", "postgres", "service_role";

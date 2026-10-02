@@ -7,12 +7,37 @@
 -- per un visitatore non loggato. Rimosse con
 -- supabase/migrazioni_manuali/2026-09-28_fix_storage_rls_anon.sql — le policy
 -- granulari già esistenti coprono tutti i casi d'uso legittimi.
+--
+-- ERRORE in quella correzione (rimediato il 2026-10-02): le policy RESTRICTIVE
+-- possono solo togliere permessi, non darli. Senza le 3 permissive, cedolini e
+-- documenti-veicoli erano rimasti inaccessibili anche agli utenti loggati. Il
+-- "permesso base" è stato ripristinato TO authenticated (non più TO PUBLIC):
+-- anon resta escluso, gli utenti loggati sono limitati dalle restringi_* sotto.
+-- Vedi supabase/migrazioni_manuali/2026-10-02_ripristina_accesso_storage_autenticati.sql
+--
+-- "Storage public access verbali" (bucket morto verbali-furgoni) rimossa il
+-- 2026-09-28 con supabase/migrazioni_manuali/2026-09-28_fix_rls_residue.sql.
 
-CREATE POLICY "Storage public access verbali" ON "storage"."objects"
+CREATE POLICY "autenticati_base_documenti_veicoli" ON "storage"."objects"
   FOR ALL
-  TO PUBLIC
-  USING ((bucket_id = 'verbali-furgoni'::text))
-  WITH CHECK ((bucket_id = 'verbali-furgoni'::text));
+  TO "authenticated"
+  USING ((bucket_id = 'documenti-veicoli'::text))
+  WITH CHECK ((bucket_id = 'documenti-veicoli'::text));
+
+CREATE POLICY "autenticati_base_lettura_cedolini" ON "storage"."objects"
+  FOR SELECT
+  TO "authenticated"
+  USING ((bucket_id = 'cedolini'::text));
+
+CREATE POLICY "autenticati_base_upload_cedolini" ON "storage"."objects"
+  FOR INSERT
+  TO "authenticated"
+  WITH CHECK ((bucket_id = 'cedolini'::text));
+
+CREATE POLICY "admin_select_vehicle_inspections" ON "storage"."objects"
+  FOR SELECT
+  TO "authenticated"
+  USING (((bucket_id = 'vehicle-inspections'::text) AND public.is_admin()));
 
 CREATE POLICY "admin_delete_cedolini_bucket" ON "storage"."objects"
   FOR DELETE

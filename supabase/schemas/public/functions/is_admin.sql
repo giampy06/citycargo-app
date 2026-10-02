@@ -10,4 +10,4 @@ CREATE OR REPLACE FUNCTION public.is_admin()
   );
 $function$;
 
-GRANT EXECUTE ON FUNCTION "public"."is_admin"() TO PUBLIC, "anon", "authenticated", "postgres", "service_role";
+GRANT EXECUTE ON FUNCTION "public"."is_admin"() TO "authenticated", "postgres", "service_role";

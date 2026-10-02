@@ -39,4 +39,4 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION "public"."chiudi_turno"(uuid, numeric) TO PUBLIC, "anon", "authenticated", "postgres", "service_role";
+GRANT EXECUTE ON FUNCTION "public"."chiudi_turno"(uuid, numeric) TO "authenticated", "postgres", "service_role";

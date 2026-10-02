@@ -12,4 +12,4 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION "public"."blocca_autopromozione_ruolo"() TO PUBLIC, "anon", "authenticated", "postgres", "service_role";
+GRANT EXECUTE ON FUNCTION "public"."blocca_autopromozione_ruolo"() TO "authenticated", "postgres", "service_role";

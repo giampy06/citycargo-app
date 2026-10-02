@@ -96,6 +96,20 @@ Dopo la correzione andrebbe ripetuto lo stesso test (chiave anon, nessun login) 
 
 ---
 
+### ⚠️ Errore nella prima correzione (scoperto e rimediato il 2026-10-02)
+
+La correzione applicata il 2026-09-28 (cancellare le 3 policy permissive) era sbagliata a metà. In PostgreSQL le policy RESTRICTIVE **possono solo togliere permessi, mai darli**: serve sempre almeno una policy PERMISSIVE che conceda l'accesso. Senza quelle 3, i bucket `documenti-veicoli` e `cedolini` sono rimasti **inaccessibili anche agli utenti loggati**, admin compresi: niente upload né apertura di cedolini e circolari. Il test di verifica del 28/09 controllava solo l'accesso anonimo, non quello legittimo, e per questo il problema non è emerso.
+
+Correzione definitiva (`supabase/migrazioni_manuali/2026-10-02_ripristina_accesso_storage_autenticati.sql`): ripristinato il permesso base sui due bucket, ma `TO authenticated` invece di `TO PUBLIC`. Verificato dal vivo:
+- **admin loggato**: elenco cedolini, patenti e foto del check-in e link firmati funzionanti (200);
+- **anonimo**: elenchi vuoti e download `Object not found` (il buco del punto 1 resta chiuso).
+
+Con lo stesso controllo è emerso un bug più vecchio, con la stessa causa: sul bucket `vehicle-inspections` non è mai esistita una policy di lettura, quindi l'admin non poteva aprire le foto del check-in da Presenze. Aggiunta `admin_select_vehicle_inspections` (solo admin), verificata funzionante.
+
+**Lezione per le prossime modifiche RLS**: ogni test di sicurezza deve verificare due cose, che chi non deve entrare resti fuori **e** che chi deve entrare entri ancora.
+
+---
+
 ## 2. CRITICO — Token Telegram esposto nella storia Git pubblica
 
 ### Come ragiona un attaccante
